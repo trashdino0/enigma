@@ -2,6 +2,7 @@
 
 mod blind_tab;
 mod crib_tab;
+mod dialogs;
 mod machine_tab;
 
 use eframe::egui;

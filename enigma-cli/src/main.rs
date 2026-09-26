@@ -23,7 +23,8 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
-use enigma_core::config::{parse_letters, parse_rotor_name, EtwKind, MachineConfig, ReflectorKind};
+use enigma_config::{AppConfig, ResolvedMachine};
+use enigma_core::config::{parse_letters, parse_rotor_name, EtwKind, ReflectorKind};
 use enigma_core::rotor::HistoricalRotor;
 use enigma_solver::crib::{build_crib_config, encode_text, solve_crib};
 use enigma_solver::hillclimb::{solve_blind, solve_blind_pool, BlindConfig, BlindPoolConfig};
@@ -32,6 +33,15 @@ use enigma_solver::score::{Lang, QuadgramScorer};
 #[derive(Parser, Debug)]
 #[command(name = "enigma", version, about = "Historically exact Enigma M3/M4")]
 struct Cli {
+    /// TOML config file (machine setups, profiles, solver defaults).
+    /// CLI flags override the file: flags > --profile > [machine].
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
+
+    /// Named profile from the config file (inherits unset fields).
+    #[arg(long, global = true)]
+    profile: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -51,28 +61,29 @@ enum Command {
 #[derive(Args, Debug)]
 struct RunArgs {
     /// Rotor order, left -> right: 3 for M3, 4 for M4 (4th = Beta/Gamma).
-    #[arg(long, num_args = 3..=4, required = true, value_name = "ROTOR")]
+    /// Optional when --config provides it.
+    #[arg(long, num_args = 0..=4, value_name = "ROTOR")]
     rotors: Vec<String>,
 
     /// Ring settings, one letter per rotor (e.g. AAA).
-    #[arg(long, default_value = "AAA")]
-    rings: String,
+    #[arg(long)]
+    rings: Option<String>,
 
     /// Start window positions, one letter per rotor (e.g. AAA).
-    #[arg(long, default_value = "AAA")]
-    pos: String,
+    #[arg(long)]
+    pos: Option<String>,
 
     /// Reflector: B, C, Thin-B, Thin-C (M4 needs a thin reflector).
-    #[arg(long, default_value = "B")]
-    reflector: String,
+    #[arg(long)]
+    reflector: Option<String>,
 
     /// Plugboard pairs, e.g. "AV BS CG" (empty = unpatched).
-    #[arg(long, default_value = "")]
-    plugs: String,
+    #[arg(long)]
+    plugs: Option<String>,
 
     /// Entry wheel: identity (Wehrmacht/Naval) or qwertz (D/K/Railway).
-    #[arg(long, default_value = "identity")]
-    etw: String,
+    #[arg(long)]
+    etw: Option<String>,
 
     /// Input text (takes precedence over --input and stdin).
     #[arg(long, conflicts_with = "input")]
@@ -91,8 +102,8 @@ struct RunArgs {
 #[derive(Args, Debug)]
 struct LangArg {
     /// Scoring language: de (German, historical default) or en (English).
-    #[arg(long, default_value = "de")]
-    lang: String,
+    #[arg(long)]
+    lang: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -106,20 +117,20 @@ struct SolveCribArgs {
     fourth: Option<String>,
 
     /// Fixed ring settings, one letter per rotor (3, or 4 with --fourth).
-    #[arg(long, default_value = "AAA")]
-    rings: String,
+    #[arg(long)]
+    rings: Option<String>,
 
     /// Fixed reflector: B, C, Thin-B, Thin-C (M4 needs a thin reflector).
-    #[arg(long, default_value = "B")]
-    reflector: String,
+    #[arg(long)]
+    reflector: Option<String>,
 
     /// Assumed-known plugboard pairs, e.g. "AV BS CG" (empty = none).
-    #[arg(long, default_value = "")]
-    plugs: String,
+    #[arg(long)]
+    plugs: Option<String>,
 
     /// Fixed entry wheel: identity (Wehrmacht/Naval) or qwertz (D/K/Railway).
-    #[arg(long, default_value = "identity")]
-    etw: String,
+    #[arg(long)]
+    etw: Option<String>,
 
     /// Known plaintext fragment (crib).
     #[arg(long, required = true)]
@@ -142,8 +153,8 @@ struct SolveCribArgs {
     min_matches: Option<usize>,
 
     /// How many top candidates to print.
-    #[arg(long, default_value_t = 5)]
-    top: usize,
+    #[arg(long)]
+    top: Option<usize>,
 
     /// JSON checkpoint file for resuming long (M4) searches.
     #[arg(long)]
@@ -173,16 +184,16 @@ struct SolveBlindArgs {
     fourth: Option<String>,
 
     /// Fixed ring settings, one letter per rotor.
-    #[arg(long, default_value = "AAA")]
-    rings: String,
+    #[arg(long)]
+    rings: Option<String>,
 
     /// Fixed reflector: B, C, Thin-B, Thin-C.
-    #[arg(long, default_value = "B")]
-    reflector: String,
+    #[arg(long)]
+    reflector: Option<String>,
 
     /// Fixed entry wheel: identity or qwertz.
-    #[arg(long, default_value = "identity")]
-    etw: String,
+    #[arg(long)]
+    etw: Option<String>,
 
     /// Ciphertext (takes precedence over --input and stdin).
     #[arg(long, conflicts_with = "input")]
@@ -193,24 +204,24 @@ struct SolveBlindArgs {
     input: Option<PathBuf>,
 
     /// Plugboard pair cap (0 = positions only, no plug climb).
-    #[arg(long, default_value_t = 10)]
-    max_plugs: usize,
+    #[arg(long)]
+    max_plugs: Option<usize>,
 
     /// Unplugged positions entering the plug climb.
-    #[arg(long, default_value_t = 10)]
-    top_positions: usize,
+    #[arg(long)]
+    top_positions: Option<usize>,
 
     /// Random restarts per position (plus one unplugged start).
-    #[arg(long, default_value_t = 3)]
-    restarts: usize,
+    #[arg(long)]
+    restarts: Option<usize>,
 
     /// PRNG seed (deterministic runs).
-    #[arg(long, default_value_t = 1)]
-    seed: u64,
+    #[arg(long)]
+    seed: Option<u64>,
 
     /// How many winners to print.
-    #[arg(long, default_value_t = 3)]
-    top: usize,
+    #[arg(long)]
+    top: Option<usize>,
 
     /// Write winners as pretty JSON to this file (in addition to text).
     #[arg(long)]
@@ -224,6 +235,7 @@ struct SolveBlindArgs {
 #[derive(Debug)]
 enum CliError {
     Enigma(enigma_core::EnigmaError),
+    Config(enigma_config::ConfigError),
     Io(io::Error),
     Msg(String),
 }
@@ -232,6 +244,7 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Enigma(e) => write!(f, "{e}"),
+            Self::Config(e) => write!(f, "{e}"),
             Self::Io(e) => write!(f, "{e}"),
             Self::Msg(m) => write!(f, "{m}"),
         }
@@ -244,9 +257,102 @@ impl From<enigma_core::EnigmaError> for CliError {
     }
 }
 
+impl From<enigma_config::ConfigError> for CliError {
+    fn from(e: enigma_config::ConfigError) -> Self {
+        Self::Config(e)
+    }
+}
+
 impl From<io::Error> for CliError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+/// Loaded `--config` file plus `--profile`, shared by every subcommand.
+struct FileCtx {
+    file: Option<AppConfig>,
+    profile: Option<String>,
+}
+
+impl FileCtx {
+    fn load(config: Option<&PathBuf>, profile: Option<&str>) -> Result<Self, CliError> {
+        let file = config
+            .map(|p| AppConfig::load(p.as_path()))
+            .transpose()
+            .map_err(CliError::Config)?;
+        Ok(Self {
+            file,
+            profile: profile.map(str::to_string),
+        })
+    }
+
+    /// Machine fields: flags > profile > [machine] > legacy flag defaults.
+    fn machine_fields(
+        &self,
+        rotors: &[String],
+        rings: Option<&str>,
+        pos: Option<&str>,
+        reflector: Option<&str>,
+        plugs: Option<&str>,
+        etw: Option<&str>,
+    ) -> Result<ResolvedMachine, CliError> {
+        if let Some(file) = &self.file {
+            let mut resolved = file
+                .machine_for(self.profile.as_deref())
+                .map_err(CliError::Config)?;
+            if !rotors.is_empty() {
+                resolved.rotors = rotors.to_vec();
+            }
+            if let Some(v) = rings {
+                resolved.rings = v.to_string();
+            }
+            if let Some(v) = pos {
+                resolved.positions = v.to_string();
+            }
+            if let Some(v) = reflector {
+                resolved.reflector = v.to_string();
+            }
+            if let Some(v) = plugs {
+                resolved.plugs = v.to_string();
+            }
+            if let Some(v) = etw {
+                resolved.etw = v.to_string();
+            }
+            return Ok(resolved);
+        }
+        if rotors.is_empty() {
+            return Err(CliError::Msg(
+                "--rotors is required without --config".into(),
+            ));
+        }
+        Ok(ResolvedMachine {
+            rotors: rotors.to_vec(),
+            rings: rings.unwrap_or("AAA").to_string(),
+            positions: pos.unwrap_or("AAA").to_string(),
+            reflector: reflector.unwrap_or("B").to_string(),
+            plugs: plugs.unwrap_or("").to_string(),
+            etw: etw.unwrap_or("identity").to_string(),
+        })
+    }
+
+    /// Solver scalar: flag > [solver] > hardcoded default.
+    fn solver_opt(
+        &self,
+        flag: Option<usize>,
+        file: impl FnOnce(&enigma_config::SolverSection) -> Option<usize>,
+        default: usize,
+    ) -> usize {
+        flag.or_else(|| self.file.as_ref().and_then(|f| file(&f.solver)))
+            .unwrap_or(default)
+    }
+
+    fn solver_lang(&self, flag: Option<&str>) -> Result<Lang, CliError> {
+        let name = flag
+            .map(str::to_string)
+            .or_else(|| self.file.as_ref().and_then(|f| f.solver.lang.clone()))
+            .unwrap_or_else(|| "de".into());
+        Lang::parse(&name).map_err(CliError::Msg)
     }
 }
 
@@ -270,36 +376,66 @@ fn parse_pool(names: &[String]) -> Result<Vec<HistoricalRotor>, CliError> {
         .collect()
 }
 
-fn run(args: &RunArgs) -> Result<String, CliError> {
-    let names: Vec<&str> = args.rotors.iter().map(String::as_str).collect();
-    let config = MachineConfig::from_strings(
-        &names,
-        &args.rings,
-        &args.pos,
-        &args.reflector,
-        &args.plugs,
-        &args.etw,
+fn run(args: &RunArgs, ctx: &FileCtx) -> Result<String, CliError> {
+    let resolved = ctx.machine_fields(
+        &args.rotors,
+        args.rings.as_deref(),
+        args.pos.as_deref(),
+        args.reflector.as_deref(),
+        args.plugs.as_deref(),
+        args.etw.as_deref(),
     )?;
-    let mut machine = config.build_machine()?;
+    let mut machine = resolved.to_machine_config()?.build_machine()?;
     let input = read_text(args.text.as_ref(), args.input.as_ref())?;
     Ok(machine.encipher_str(&input))
 }
 
-fn run_solve_crib(args: &SolveCribArgs) -> Result<(), CliError> {
+fn run_solve_crib(args: &SolveCribArgs, ctx: &FileCtx) -> Result<(), CliError> {
     let cipher_raw = read_text(args.cipher.as_ref(), args.input.as_ref())?;
-    let lang = Lang::parse(&args.lang.lang).map_err(CliError::Msg)?;
+    let lang = ctx.solver_lang(args.lang.lang.as_deref())?;
+    let file_machine = match &ctx.file {
+        Some(file) => Some(
+            file.machine_for(ctx.profile.as_deref())
+                .map_err(CliError::Config)?,
+        ),
+        None => None,
+    };
+    let rings = args
+        .rings
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.rings.clone()))
+        .unwrap_or_else(|| "AAA".into());
+    let reflector = args
+        .reflector
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.reflector.clone()))
+        .unwrap_or_else(|| "B".into());
+    let plugs = args
+        .plugs
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.plugs.clone()))
+        .unwrap_or_default();
+    let etw = args
+        .etw
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.etw.clone()))
+        .unwrap_or_else(|| "identity".into());
+    let top = ctx.solver_opt(args.top, |s| s.top, 5);
+    let min_matches = args
+        .min_matches
+        .or_else(|| ctx.file.as_ref().and_then(|f| f.solver.min_matches));
     let cfg = build_crib_config(
         &args.rotors,
         args.fourth.as_deref(),
-        &args.rings,
-        &args.reflector,
-        &args.plugs,
-        &args.etw,
+        &rings,
+        &reflector,
+        &plugs,
+        &etw,
         &cipher_raw,
         &args.crib,
         args.crib_offset,
-        args.top,
-        args.min_matches,
+        top,
+        min_matches,
     )?;
     let scorer = QuadgramScorer::new(lang);
     let on_progress = |done: usize, total: usize| {
@@ -335,14 +471,46 @@ fn run_solve_crib(args: &SolveCribArgs) -> Result<(), CliError> {
     Ok(())
 }
 
-fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
+fn run_solve_blind(args: &SolveBlindArgs, ctx: &FileCtx) -> Result<(), CliError> {
     let cipher_raw = read_text(args.cipher.as_ref(), args.input.as_ref())?;
     let cipher = encode_text(&cipher_raw);
-    let lang = Lang::parse(&args.lang.lang).map_err(CliError::Msg)?;
-    let rings = parse_letters(&args.rings)?;
-    let reflector = ReflectorKind::parse(&args.reflector)?;
-    let etw = EtwKind::parse(&args.etw)?;
+    let lang = ctx.solver_lang(args.lang.lang.as_deref())?;
+    let file_machine = match &ctx.file {
+        Some(file) => Some(
+            file.machine_for(ctx.profile.as_deref())
+                .map_err(CliError::Config)?,
+        ),
+        None => None,
+    };
+    let rings = args
+        .rings
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.rings.clone()))
+        .unwrap_or_else(|| "AAA".into());
+    let reflector = args
+        .reflector
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.reflector.clone()))
+        .unwrap_or_else(|| "B".into());
+    let etw = args
+        .etw
+        .clone()
+        .or_else(|| file_machine.as_ref().map(|m| m.etw.clone()))
+        .unwrap_or_else(|| "identity".into());
+    let reflector = ReflectorKind::parse(&reflector)?;
+    let etw = EtwKind::parse(&etw)?;
+    let max_plugs = ctx.solver_opt(args.max_plugs, |s| s.max_plugs, 10);
+    let top_positions = ctx.solver_opt(args.top_positions, |s| s.top_positions, 10);
+    let restarts = ctx.solver_opt(args.restarts, |s| s.restarts, 3);
+    let seed = ctx
+        .file
+        .as_ref()
+        .and_then(|f| f.solver.seed)
+        .or(args.seed)
+        .unwrap_or(1);
+    let top = ctx.solver_opt(args.top, |s| s.top, 3);
     let scorer = QuadgramScorer::new(lang);
+    let rings = parse_letters(&rings)?;
     let on_progress = |p: enigma_solver::hillclimb::BlindProgress| {
         use enigma_solver::hillclimb::BlindProgress as BP;
         match p {
@@ -363,14 +531,14 @@ fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
         let cfg = BlindConfig {
             cipher,
             order,
-            rings,
+            rings: rings.clone(),
             reflector,
-            etw,
-            max_plugs: args.max_plugs,
-            top_positions: args.top_positions,
-            restarts: args.restarts,
-            seed: args.seed,
-            top_n: args.top,
+            etw: etw.clone(),
+            max_plugs,
+            top_positions,
+            restarts,
+            seed,
+            top_n: top,
         };
         let best = solve_blind(&cfg, &scorer, Some(&on_progress))?;
         eprintln!();
@@ -387,15 +555,15 @@ fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
             cipher,
             rotor_pool: pool,
             fourth,
-            rings,
+            rings: rings.clone(),
             reflector,
-            etw,
-            max_plugs: args.max_plugs,
-            top_positions: args.top_positions,
-            restarts: args.restarts,
-            seed: args.seed,
+            etw: etw.clone(),
+            max_plugs,
+            top_positions,
+            restarts,
+            seed,
             per_order_top: 1,
-            top_n: args.top,
+            top_n: top,
         };
         let best = solve_blind_pool(&cfg, &scorer, Some(&on_progress))?;
         eprintln!();
@@ -446,8 +614,15 @@ fn print_blind(
 
 fn main() {
     let cli = Cli::parse();
+    let ctx = match FileCtx::load(cli.config.as_ref(), cli.profile.as_deref()) {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            eprintln!("enigma: {e}");
+            std::process::exit(1);
+        }
+    };
     let result = match &cli.command {
-        Command::Encrypt(args) | Command::Decrypt(args) => run(args).and_then(|out| {
+        Command::Encrypt(args) | Command::Decrypt(args) => run(args, &ctx).and_then(|out| {
             if let Some(path) = &args.output {
                 std::fs::write(path, &out).map_err(CliError::Io)
             } else {
@@ -455,8 +630,8 @@ fn main() {
                 Ok(())
             }
         }),
-        Command::SolveCrib(args) => run_solve_crib(args),
-        Command::SolveBlind(args) => run_solve_blind(args),
+        Command::SolveCrib(args) => run_solve_crib(args, &ctx),
+        Command::SolveBlind(args) => run_solve_blind(args, &ctx),
     };
     if let Err(e) = result {
         eprintln!("enigma: {e}");

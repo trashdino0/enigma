@@ -5,6 +5,7 @@
 //! rotor stepping is one-way, like the real machine.
 
 use eframe::egui;
+use enigma_config::{AppConfig, MachineSection};
 use enigma_core::{
     config::MachineConfig,
     machine::{EnigmaMachine, SignalTrace},
@@ -104,6 +105,53 @@ impl MachineTab {
         self.last_trace = None;
     }
 
+    /// Current form as a config section (GUI "save config").
+    fn to_section(&self) -> MachineSection {
+        let mut rotors: Vec<String> = self.slots[..3].iter().map(|s| s.to_string()).collect();
+        if self.slots[3] != "—" {
+            rotors.push(self.slots[3].clone());
+        }
+        MachineSection {
+            rotors: Some(rotors),
+            rings: Some(self.rings.clone()),
+            positions: Some(self.positions.clone()),
+            reflector: Some(self.reflector.clone()),
+            plugs: Some(self.plugs.clone()),
+            etw: Some(self.etw.clone()),
+        }
+    }
+
+    /// Fill the form from a config section, then load it (GUI "load config").
+    /// Unknown slot names are kept verbatim so validation reports them.
+    fn apply_section(&mut self, section: &MachineSection) {
+        if let Some(rotors) = &section.rotors {
+            for (i, slot) in self.slots.iter_mut().enumerate() {
+                *slot = rotors.get(i).cloned().unwrap_or_else(|| "—".into());
+            }
+        }
+        if let Some(v) = &section.rings {
+            self.rings = v.clone();
+        }
+        if let Some(v) = &section.positions {
+            self.positions = v.clone();
+        }
+        if let Some(v) = &section.reflector {
+            self.reflector = v.clone();
+        }
+        if let Some(v) = &section.plugs {
+            self.plugs = v.clone();
+        }
+        if let Some(v) = &section.etw {
+            self.etw = v.clone();
+        }
+        self.load();
+    }
+
+    /// Display text of the current output (what "save output" writes).
+    fn output_text(&self) -> String {
+        rebuild_output(&self.input, &self.cipher_letters)
+    }
+
     /// Sync the cipher buffer with the edited input text.
     fn sync(&mut self) {
         let Some(machine) = self.machine.as_mut() else {
@@ -197,6 +245,32 @@ impl MachineTab {
             if ui.button("Load machine").clicked() {
                 self.load();
             }
+            ui.horizontal(|ui| {
+                if ui.button("Load config…").clicked() {
+                    if let Some(path) = crate::dialogs::pick_toml() {
+                        match AppConfig::load(&path) {
+                            Ok(cfg) => self.apply_section(&cfg.machine),
+                            Err(e) => self.error = Some(e.to_string()),
+                        }
+                    }
+                }
+                if ui.button("Save config…").clicked() {
+                    let cfg = AppConfig {
+                        machine: self.to_section(),
+                        ..AppConfig::default()
+                    };
+                    match cfg.to_toml_string() {
+                        Ok(text) => {
+                            if let Some(path) = crate::dialogs::save_toml() {
+                                if let Err(e) = crate::dialogs::write_text(&path, &text) {
+                                    self.error = Some(e);
+                                }
+                            }
+                        }
+                        Err(e) => self.error = Some(e.to_string()),
+                    }
+                }
+            });
             if let Some(e) = &self.error {
                 ui.colored_label(egui::Color32::RED, e);
             }
@@ -240,13 +314,22 @@ impl MachineTab {
                 ui.label(egui::RichText::new("Signal path").strong());
                 ui.monospace(crate::trace_line(t));
             }
-            if ui.button("Clear").clicked() {
-                self.reset_buffers();
-                if let Some(m) = self.machine.as_mut() {
-                    let start = self.start_positions.clone();
-                    let _ = m.set_positions(&start);
+            ui.horizontal(|ui| {
+                if ui.button("Clear").clicked() {
+                    self.reset_buffers();
+                    if let Some(m) = self.machine.as_mut() {
+                        let start = self.start_positions.clone();
+                        let _ = m.set_positions(&start);
+                    }
                 }
-            }
+                if ui.button("Save output…").clicked() {
+                    if let Some(path) = crate::dialogs::save_txt("message.txt") {
+                        if let Err(e) = crate::dialogs::write_text(&path, &self.output_text()) {
+                            self.error = Some(e);
+                        }
+                    }
+                }
+            });
         });
     }
 }
@@ -296,5 +379,26 @@ mod tests {
         tab.load();
         assert!(tab.error.is_some());
         assert!(tab.machine.is_none());
+    }
+
+    #[test]
+    fn section_roundtrip_through_file() {
+        let tab = MachineTab::default();
+        let cfg = AppConfig {
+            machine: tab.to_section(),
+            ..AppConfig::default()
+        };
+        let path = std::env::temp_dir().join("enigma_gui_section_test.toml");
+        std::fs::write(&path, cfg.to_toml_string().expect("serializes")).unwrap();
+        let back = AppConfig::load(&path).expect("loads");
+        std::fs::remove_file(&path).ok();
+        let mut tab2 = MachineTab {
+            positions: "ZZZ".into(),
+            ..MachineTab::default()
+        };
+        tab2.apply_section(&back.machine);
+        assert_eq!(tab2.positions, "AAA");
+        assert!(tab2.machine.is_some(), "reloaded section builds");
+        assert_eq!(tab2.output_text(), "");
     }
 }

@@ -35,3 +35,12 @@ letters are rejected; ~150+ characters give reliable results.
 
 Quitting the app ends any running search. Resume long crib searches through
 the CLI `--checkpoint-file` instead.
+
+## Files: configs and messages
+
+- **Load config…** (machine tab, both solver tabs) reads a TOML setup file
+  into the form — see [CLI configuration files](cli.md#configuration-files)
+  for the format. Solver tabs split a leading Beta/Gamma into the M4 fourth.
+- **Save config…** (machine tab) writes the current form as `[machine]` TOML.
+- **Save output…** (machine tab) writes the output pane to a `.txt` file;
+  **Save winner…** (solver tabs) writes the selected winner's full plaintext.

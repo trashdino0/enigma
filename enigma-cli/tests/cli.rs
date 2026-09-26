@@ -1,9 +1,16 @@
 //! CLI integration tests: known vectors + solver subcommands end-to-end.
 
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 
 fn enigma() -> Command {
     Command::cargo_bin("enigma").expect("enigma binary builds")
+}
+
+/// Absolute path to a file in the workspace root (tests run with the
+/// crate dir as CWD, so `examples/...` would not resolve).
+fn workspace_file(rel: &str) -> String {
+    format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), rel)
 }
 
 #[test]
@@ -203,6 +210,61 @@ fn solve_crib_output_json() {
     assert!(json.contains("\"matches\": 18"), "{json}");
     assert!(json.contains("\"II\""), "{json}");
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn config_file_drives_encrypt() {
+    let config = workspace_file("examples/day.toml");
+    enigma()
+        .args(["encrypt", "--config", &config, "--text", "AAAAA"])
+        .assert()
+        .success()
+        .stdout("BDZGO");
+}
+
+#[test]
+fn config_profile_and_flag_override() {
+    let config = workspace_file("examples/day.toml");
+    // Naval profile from the file.
+    enigma()
+        .args([
+            "encrypt",
+            "--config",
+            &config,
+            "--profile",
+            "naval",
+            "--text",
+            "HELLOWORLD",
+        ])
+        .assert()
+        .success()
+        .stdout("ILBDAAMTAZ");
+    // Flag overrides the file's positions (AAA -> AAB changes output).
+    enigma()
+        .args([
+            "encrypt", "--config", &config, "--pos", "AAB", "--text", "AAAAA",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("BDZGO").not());
+}
+
+#[test]
+fn unknown_profile_fails_clearly() {
+    let config = workspace_file("examples/day.toml");
+    enigma()
+        .args([
+            "encrypt",
+            "--config",
+            &config,
+            "--profile",
+            "desert",
+            "--text",
+            "A",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("naval"));
 }
 
 #[test]

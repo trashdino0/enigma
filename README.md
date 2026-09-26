@@ -35,7 +35,9 @@ historical test — your machine agrees with the real thing.
 **2. Scramble it properly.** Add plugboard pairs `AV BS CG`, change positions
 to `KDO`, press **Load machine** again, and type a sentence. Spaces pass
 through untouched; every letter comes out different — and no letter ever
-encrypts to itself, just like the original.
+encrypts to itself, just like the original. Like a setup? **Save config…**
+writes it to a file you can **Load config…** later, and **Save output…**
+exports the message as a `.txt` file.
 
 **3. Decrypt it back.** Encryption and decryption are the *same* operation
 here. Load the exact same settings on any machine and type in the gibberish:

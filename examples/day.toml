@@ -1,0 +1,26 @@
+# Daily key example: base M3 setup plus a naval M4 profile.
+# Use with: enigma encrypt --config examples/day.toml --text AAAAA
+#       or: enigma encrypt --config examples/day.toml --profile naval --text HELLOWORLD
+# Any CLI flag overrides the file (flags > --profile > [machine]).
+
+[machine]
+rotors = ["I", "II", "III"]
+rings = "AAA"
+positions = "AAA"
+reflector = "B"
+plugs = ""
+etw = "identity"
+
+[solver]
+lang = "de"
+top = 5
+max_plugs = 6
+top_positions = 10
+restarts = 3
+seed = 1
+
+[profiles.naval]
+rotors = ["Beta", "I", "II", "III"]
+rings = "AAAA"
+positions = "AAAA"
+reflector = "Thin-B"

@@ -3,6 +3,7 @@
 use std::sync::mpsc;
 
 use eframe::egui;
+use enigma_config::MachineSection;
 use enigma_core::pos_to_char;
 use enigma_solver::{
     hillclimb::{solve_blind_pool, BlindCandidate, BlindPoolConfig, BlindProgress},
@@ -189,6 +190,24 @@ impl BlindTab {
         }
     }
 
+    /// Fill machine fields from a config section (pool/fourth split).
+    fn apply_machine_section(&mut self, section: &MachineSection) {
+        if let Some(rotors) = &section.rotors {
+            let (fourth, pool) = crate::dialogs::split_rotors(rotors);
+            self.pool = pool;
+            self.fourth = fourth;
+        }
+        if let Some(v) = &section.rings {
+            self.rings = v.clone();
+        }
+        if let Some(v) = &section.reflector {
+            self.reflector = v.clone();
+        }
+        if let Some(v) = &section.etw {
+            self.etw = v.clone();
+        }
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui) {
         self.poll(ui);
         egui::Panel::left("blind_form").show(ui, |ui| {
@@ -256,6 +275,14 @@ impl BlindTab {
             if ui.button("Start search").clicked() {
                 self.start();
             }
+            if ui.button("Load config…").clicked() {
+                if let Some(path) = crate::dialogs::pick_toml() {
+                    match enigma_config::AppConfig::load(&path) {
+                        Ok(cfg) => self.apply_machine_section(&cfg.machine),
+                        Err(e) => self.error = Some(e.to_string()),
+                    }
+                }
+            }
             if let Some(e) = &self.error {
                 ui.colored_label(egui::Color32::RED, e);
             }
@@ -281,26 +308,31 @@ impl BlindTab {
             egui::ScrollArea::vertical()
                 .max_height(200.0)
                 .show(ui, |ui| {
-                    for (i, cand) in self.winners.iter().enumerate() {
-                        let label = format!(
-                            "#{} {} pos {} plugs {} score {:.1}",
-                            i + 1,
-                            cand.order.join(" "),
-                            cand.positions
-                                .iter()
-                                .map(|&p| pos_to_char(p))
-                                .collect::<String>(),
-                            if cand.plugs.is_empty() {
-                                "-".to_string()
-                            } else {
-                                cand.plugs
+                    for i in 0..self.winners.len() {
+                        let label = {
+                            let cand = &self.winners[i];
+                            format!(
+                                "#{} {} pos {} plugs {} score {:.1}",
+                                i + 1,
+                                cand.order.join(" "),
+                                cand.positions
                                     .iter()
-                                    .map(|&(a, b)| format!("{}{}", pos_to_char(a), pos_to_char(b)))
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
-                            },
-                            cand.score
-                        );
+                                    .map(|&p| pos_to_char(p))
+                                    .collect::<String>(),
+                                if cand.plugs.is_empty() {
+                                    "-".to_string()
+                                } else {
+                                    cand.plugs
+                                        .iter()
+                                        .map(|&(a, b)| {
+                                            format!("{}{}", pos_to_char(a), pos_to_char(b))
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                },
+                                cand.score
+                            )
+                        };
                         ui.selectable_value(&mut self.selected, i, label);
                     }
                     if self.winners.is_empty() {
@@ -313,14 +345,29 @@ impl BlindTab {
                         });
                     }
                 });
-            if let Some(cand) = self.winners.get(self.selected) {
+            if self.winners.get(self.selected).is_some() {
                 ui.separator();
                 ui.label(egui::RichText::new("Decrypt preview").strong());
                 egui::ScrollArea::vertical()
                     .max_height(200.0)
                     .show(ui, |ui| {
-                        ui.monospace(cand.plaintext.chars().take(600).collect::<String>());
+                        let text = &self.winners[self.selected].plaintext;
+                        let shown: String = text.chars().take(600).collect();
+                        let ellipsis = if text.chars().count() > 600 {
+                            "…"
+                        } else {
+                            ""
+                        };
+                        ui.monospace(format!("{shown}{ellipsis}"));
                     });
+                if ui.button("Save winner…").clicked() {
+                    let text = self.winners[self.selected].plaintext.clone();
+                    if let Some(path) = crate::dialogs::save_txt("blind_result.txt") {
+                        if let Err(e) = crate::dialogs::write_text(&path, &text) {
+                            self.error = Some(e);
+                        }
+                    }
+                }
             }
         });
     }

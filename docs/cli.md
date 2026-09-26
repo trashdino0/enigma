@@ -76,3 +76,42 @@ Progress prints live (`scan`/`climb`/`orders` counters on stderr).
 
 Failures exit non-zero with a one-line `enigma: ...` message (duplicate
 rotors, 11 plug pairs, crib longer than cipher, …).
+
+## Configuration files
+
+Machine setups live in TOML files instead of long command lines
+(`examples/day.toml` is a working example). Precedence everywhere:
+**flags > `--profile` > `[machine]`**.
+
+```toml
+[machine]                       # base setup
+rotors = ["I", "II", "III"]
+rings = "AAA"
+positions = "AAA"
+reflector = "B"
+plugs = ""
+etw = "identity"
+
+[solver]                        # solve-command defaults
+lang = "de"
+top = 5
+
+[profiles.naval]                # named overlay, inherits unset fields
+rotors = ["Beta", "I", "II", "III"]
+rings = "AAAA"
+positions = "AAAA"
+reflector = "Thin-B"
+```
+
+```sh
+enigma encrypt --config examples/day.toml --text AAAAA
+# BDZGO
+enigma encrypt --config examples/day.toml --profile naval --text HELLOWORLD
+# ILBDAAMTAZ
+enigma encrypt --config examples/day.toml --pos AAB --text AAAAA
+# flags win: different output than BDZGO
+```
+
+Solver flags (`--lang`, `--top`, `--max-plugs`, …) fall back to `[solver]`
+the same way. Unknown profiles fail listing the known ones; anything still
+missing after merging names the field.

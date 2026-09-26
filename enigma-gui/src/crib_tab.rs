@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 
 use eframe::egui;
+use enigma_config::MachineSection;
 use enigma_core::pos_to_char;
 use enigma_solver::{
     crib::{build_crib_config, load_checkpoint, solve_crib, CribCandidate, CribConfig},
@@ -188,6 +189,27 @@ impl CribTab {
             self.update_preview();
         }
     }
+    /// Fill machine fields from a config section (pool/fourth split).
+    fn apply_machine_section(&mut self, section: &MachineSection) {
+        if let Some(rotors) = &section.rotors {
+            let (fourth, pool) = crate::dialogs::split_rotors(rotors);
+            self.pool = pool;
+            self.fourth = fourth;
+        }
+        if let Some(v) = &section.rings {
+            self.rings = v.clone();
+        }
+        if let Some(v) = &section.reflector {
+            self.reflector = v.clone();
+        }
+        if let Some(v) = &section.plugs {
+            self.plugs = v.clone();
+        }
+        if let Some(v) = &section.etw {
+            self.etw = v.clone();
+        }
+    }
+
     fn update_preview(&mut self) {
         self.preview.clear();
         let (Some(cfg), Some(cand)) = (self.last_cfg.as_ref(), self.results.get(self.selected))
@@ -221,12 +243,12 @@ impl CribTab {
             etw_name,
         ) {
             if let Ok(mut m) = mcfg.build_machine() {
-                let plain: String = cfg
+                // Full plaintext is kept for "save winner"; display truncates.
+                self.preview = cfg
                     .cipher
                     .iter()
                     .map(|&c| pos_to_char(m.encipher_char(c)))
                     .collect();
-                self.preview = plain.chars().take(600).collect();
             }
         }
     }
@@ -306,6 +328,14 @@ impl CribTab {
             if ui.button("Start search").clicked() {
                 self.start();
             }
+            if ui.button("Load config…").clicked() {
+                if let Some(path) = crate::dialogs::pick_toml() {
+                    match enigma_config::AppConfig::load(&path) {
+                        Ok(cfg) => self.apply_machine_section(&cfg.machine),
+                        Err(e) => self.error = Some(e.to_string()),
+                    }
+                }
+            }
             if let Some(e) = &self.error {
                 ui.colored_label(egui::Color32::RED, e);
             }
@@ -361,8 +391,21 @@ impl CribTab {
                 egui::ScrollArea::vertical()
                     .max_height(200.0)
                     .show(ui, |ui| {
-                        ui.monospace(&self.preview);
+                        let shown: String = self.preview.chars().take(600).collect();
+                        let ellipsis = if self.preview.chars().count() > 600 {
+                            "…"
+                        } else {
+                            ""
+                        };
+                        ui.monospace(format!("{shown}{ellipsis}"));
                     });
+                if ui.button("Save winner…").clicked() {
+                    if let Some(path) = crate::dialogs::save_txt("crib_result.txt") {
+                        if let Err(e) = crate::dialogs::write_text(&path, &self.preview) {
+                            self.error = Some(e);
+                        }
+                    }
+                }
             }
         });
     }
