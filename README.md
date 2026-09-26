@@ -24,6 +24,7 @@ search parallelized with rayon.
 | `enigma-solver`| Crib + blind solvers, quadgram scoring (`rayon`, `serde`) |
 | `enigma-cli`   | `enigma` binary: encrypt/decrypt/solve-crib/solve-blind |
 | `enigma-tui`   | `enigma-tui` binary: live typing + signal path, crib progress view |
+| `enigma-gui`   | `enigma-gui` binary: desktop workbench (machine + crib + blind tabs) |
 | `examples/`    | Demo plaintext/cipher pairs used below                   |
 
 ## Build
@@ -34,7 +35,7 @@ Requires stable Rust (developed on 1.98). Solvers are CPU-heavy: use
 ```sh
 cargo build                 # debug binaries in target/debug/
 cargo build --release       # optimized binaries in target/release/
-cargo test --workspace      # 60 tests
+cargo test --workspace      # 63 tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo bench -p enigma-solver   # hot-loop baselines (release)
@@ -99,6 +100,25 @@ enigma solve-blind --pool I II III --input examples/blind_cipher.txt --lang en \
 Measured on a modern desktop (release): the crib demo above ≈ 0.15 s, the
 blind demo ≈ 0.25 s. Debug builds are an order of magnitude slower — always
 time and demo with `--release`.
+
+## GUI
+
+Prefer windows over terminals? The desktop app has the same three areas as
+tabs, with dropdowns instead of typed settings:
+
+```sh
+cargo run --release -p enigma-gui
+```
+
+- **Machine** — rotor/reflector/entry-wheel dropdowns, rings/positions/plugs
+  fields, `Load machine`, then type in the input box: rotor windows, output,
+  and the per-stage signal path update live. Edits, pastes, and deletes
+  re-sync by rewind + replay.
+- **Crib solver** — pool/fourth/rings/reflector/plugs/language/cipher/crib
+  form, `Start search`, progress bar, clickable results with a decrypt
+  preview.
+- **Blind solver** — pool form plus plug cap/positions/restarts/seed,
+  scan/climb/order progress, winners with full plaintext preview.
 
 ## TUI
 

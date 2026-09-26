@@ -1,0 +1,15 @@
+[package]
+name = "enigma-gui"
+version = "0.1.0"
+edition = "2021"
+description = "Enigma M3/M4 desktop GUI: machine, crib and blind solvers (egui)"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "enigma-gui"
+path = "src/main.rs"
+
+[dependencies]
+enigma-core = { path = "../enigma-core" }
+enigma-solver = { path = "../enigma-solver" }
+eframe = "0.36"

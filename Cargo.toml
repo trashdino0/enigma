@@ -1,5 +1,5 @@
 [workspace]
-members = ["enigma-core", "enigma-cli", "enigma-tui", "enigma-solver"]
+members = ["enigma-core", "enigma-cli", "enigma-tui", "enigma-solver", "enigma-gui"]
 resolver = "2"
 
 [profile.release]
