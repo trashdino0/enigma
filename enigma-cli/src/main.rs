@@ -343,7 +343,21 @@ fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
     let reflector = ReflectorKind::parse(&args.reflector)?;
     let etw = EtwKind::parse(&args.etw)?;
     let scorer = QuadgramScorer::new(lang);
-    eprintln!("blind: scanning positions...");
+    let on_progress = |p: enigma_solver::hillclimb::BlindProgress| {
+        use enigma_solver::hillclimb::BlindProgress as BP;
+        match p {
+            BP::Scan { done, total } => {
+                eprint!("\rblind scan: {done}/{total} positions");
+            }
+            BP::Climb { done, total } => {
+                eprint!("\rblind climb: {done}/{total} positions");
+            }
+            BP::Order { done, total } => {
+                eprint!("\rblind orders: {done}/{total}");
+            }
+        }
+        let _ = io::stderr().flush();
+    };
     if args.pool.is_empty() {
         let order = parse_pool(&args.rotors)?;
         let cfg = BlindConfig {
@@ -358,7 +372,8 @@ fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
             seed: args.seed,
             top_n: args.top,
         };
-        let best = solve_blind(&cfg, &scorer)?;
+        let best = solve_blind(&cfg, &scorer, Some(&on_progress))?;
+        eprintln!();
         print_blind(&best, args.output_json.as_deref())?;
     } else {
         let pool = parse_pool(&args.pool)?;
@@ -382,7 +397,8 @@ fn run_solve_blind(args: &SolveBlindArgs) -> Result<(), CliError> {
             per_order_top: 1,
             top_n: args.top,
         };
-        let best = solve_blind_pool(&cfg, &scorer)?;
+        let best = solve_blind_pool(&cfg, &scorer, Some(&on_progress))?;
+        eprintln!();
         print_blind(&best, args.output_json.as_deref())?;
     }
     Ok(())

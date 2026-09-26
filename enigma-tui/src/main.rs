@@ -1,229 +1,216 @@
-//! `enigma-tui`: live Enigma terminal.
+//! `enigma-tui`: menu-driven Enigma terminal — no CLI flags required.
 //!
-//! Type `A-Z` to encipher with visible stepping; the signal-path pane shows
-//! every stage of the last keypress. `Backspace` undoes (rebuild + replay),
-//! `Ctrl-R` resets to the configured start, `Esc`/`Ctrl-C` quits.
+//! The menu offers three modes, each with an in-TUI configuration form:
+//! type (interactive enciphering), crib search, and blind search. CLI flags
+//! below only *prefill* the forms.
 //!
 //! ```text
-//! enigma-tui --rotors I II III --rings AAA --pos AAA --reflector B
-//! enigma-tui solve-crib --rotors I II III --crib WETTER --lang de \
-//!   --cipher CIPHERTEXT...
+//! enigma-tui
+//! enigma-tui --rotors I II III --reflector B --lang de
 //! ```
 
 mod app;
+mod config_form;
+mod solve_ui;
+mod type_ui;
 
 use std::io;
 
-use app::{format_trace, App};
-use clap::{Args, Parser, Subcommand};
+use clap::Parser;
+use config_form::{ConfigForm, FormMode, Prefill, Ready};
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use enigma_core::config::MachineConfig;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Gauge, Paragraph, Wrap},
+    text::Line,
+    widgets::{Block, Borders, Paragraph, Wrap},
     Frame, Terminal,
 };
 
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
-
-use enigma_solver::crib::{build_crib_config, load_checkpoint, solve_crib, CribCandidate};
-use enigma_solver::score::{Lang, QuadgramScorer};
-
-/// Live terminal: bare flags type interactively, `solve-crib` watches a search.
+/// All flags are optional prefills for the in-TUI forms.
 #[derive(Parser, Debug)]
-#[command(name = "enigma-tui", version, about = "Live Enigma M3/M4 terminal")]
+#[command(
+    name = "enigma-tui",
+    version,
+    about = "Menu-driven Enigma M3/M4 terminal"
+)]
 struct Cli {
-    #[command(subcommand)]
-    command: Option<TuiCommand>,
-
-    #[command(flatten)]
-    type_args: TypeArgs,
-}
-
-/// Same machine flags as the CLI; no I/O flags (the terminal *is* the I/O).
-#[derive(Args, Debug)]
-struct TypeArgs {
-    /// Rotor order, left -> right: 3 for M3, 4 for M4 (4th = Beta/Gamma).
-    #[arg(long, num_args = 3..=4, required = false, value_name = "ROTOR")]
+    /// Prefill rotors (space-separated names).
+    #[arg(long, num_args = 1..=8, value_name = "ROTOR")]
     rotors: Vec<String>,
 
-    /// Ring settings, one letter per rotor (e.g. AAA).
-    #[arg(long, default_value = "AAA")]
-    rings: String,
-
-    /// Start window positions, one letter per rotor (e.g. AAA).
-    #[arg(long, default_value = "AAA")]
-    pos: String,
-
-    /// Reflector: B, C, Thin-B, Thin-C (M4 needs a thin reflector).
-    #[arg(long, default_value = "B")]
-    reflector: String,
-
-    /// Plugboard pairs, e.g. "AV BS CG" (empty = unpatched).
-    #[arg(long, default_value = "")]
-    plugs: String,
-
-    /// Entry wheel: identity (Wehrmacht/Naval) or qwertz (D/K/Railway).
-    #[arg(long, default_value = "identity")]
-    etw: String,
-}
-
-#[derive(Subcommand, Debug)]
-enum TuiCommand {
-    /// Watch a known-plaintext search: progress gauge + live top candidates.
-    SolveCrib(SolveTuiArgs),
-}
-
-#[derive(Args, Debug)]
-struct SolveTuiArgs {
-    /// Rotor pool to permute (taken 3 per order).
-    #[arg(long, num_args = 1..=8, required = true, value_name = "ROTOR")]
-    rotors: Vec<String>,
-
-    /// M4 fixed thin 4th rotor (Beta/Gamma), prepended to every order.
-    #[arg(long, value_name = "ROTOR")]
-    fourth: Option<String>,
-
-    /// Fixed ring settings, one letter per rotor (3, or 4 with --fourth).
-    #[arg(long, default_value = "AAA")]
-    rings: String,
-
-    /// Fixed reflector: B, C, Thin-B, Thin-C.
-    #[arg(long, default_value = "B")]
-    reflector: String,
-
-    /// Assumed-known plugboard pairs, e.g. "AV BS CG".
-    #[arg(long, default_value = "")]
-    plugs: String,
-
-    /// Fixed entry wheel: identity or qwertz.
-    #[arg(long, default_value = "identity")]
-    etw: String,
-
-    /// Ciphertext to attack.
-    #[arg(long, required = true)]
-    cipher: String,
-
-    /// Known plaintext fragment.
-    #[arg(long, required = true)]
-    crib: String,
-
-    /// Crib offset in the ciphertext (default: scan every offset).
+    /// Prefill ring settings (e.g. AAA).
     #[arg(long)]
-    crib_offset: Option<usize>,
+    rings: Option<String>,
 
-    /// Scoring language: de (default) or en.
-    #[arg(long, default_value = "de")]
-    lang: String,
+    /// Prefill start window positions (e.g. AAA).
+    #[arg(long)]
+    pos: Option<String>,
 
-    /// How many top candidates to show.
-    #[arg(long, default_value_t = 5)]
-    top: usize,
+    /// Prefill reflector (B, C, Thin-B, Thin-C).
+    #[arg(long)]
+    reflector: Option<String>,
+
+    /// Prefill plugboard pairs (e.g. "AV BS CG").
+    #[arg(long)]
+    plugs: Option<String>,
+
+    /// Prefill entry wheel (identity / qwertz).
+    #[arg(long)]
+    etw: Option<String>,
+
+    /// Prefill scoring language (de / en).
+    #[arg(long)]
+    lang: Option<String>,
 }
 
-fn draw(frame: &mut Frame, app: &App) {
-    let area = frame.area();
+fn main() {
+    let cli = Cli::parse();
+    let prefill = Prefill {
+        rotors: cli.rotors,
+        rings: cli.rings,
+        positions: cli.pos,
+        reflector: cli.reflector,
+        plugs: cli.plugs,
+        etw: cli.etw,
+        lang: cli.lang,
+    };
+    if let Err(e) = menu_loop(&prefill) {
+        eprintln!("enigma-tui: {e}");
+        std::process::exit(1);
+    }
+}
+
+const MENU_ITEMS: [(&str, &str); 3] = [
+    ("1", "Type — encipher interactively with live signal path"),
+    (
+        "2",
+        "Solve — known plaintext (crib search over orders × positions)",
+    ),
+    (
+        "3",
+        "Solve — ciphertext only (position scan + plugboard climb)",
+    ),
+];
+
+fn draw_menu(frame: &mut Frame, selected: usize, prefill_summary: &str) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // config
-            Constraint::Length(5), // rotor windows
-            Constraint::Length(4), // signal path (wraps on narrow terms)
-            Constraint::Min(6),    // input/output panes
-            Constraint::Length(3), // help
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Length(3),
         ])
-        .split(area);
+        .split(frame.area());
 
     frame.render_widget(
-        Paragraph::new(app.config_summary()).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Enigma — configuration "),
-        ),
+        Paragraph::new("Machine, crib solver, and blind solver — configure everything below.")
+            .block(Block::default().borders(Borders::ALL).title(" Enigma ")),
         rows[0],
     );
 
-    // Rotor windows: one column per rotor, window letter emphasized.
-    let names = app.rotor_names();
-    let windows = app.window_letters();
-    let rings = app.ring_letters();
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(vec![Constraint::Ratio(1, names.len() as u32); names.len()])
-        .split(rows[1]);
-    for (i, cell) in cols.iter().enumerate() {
-        let body = vec![
-            Line::from(vec![Span::styled(
-                windows[i].to_string(),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )]),
-            Line::from(format!("ring {}", rings[i])),
-        ];
-        frame.render_widget(
-            Paragraph::new(body)
-                .block(Block::default().borders(Borders::ALL).title(format!(
-                    " {} ",
-                    names.get(i).map(String::as_str).unwrap_or("?")
-                )))
-                .centered(),
-            *cell,
-        );
+    let mut lines = Vec::new();
+    for (i, (key, desc)) in MENU_ITEMS.iter().enumerate() {
+        let marker = if i == selected { ">" } else { " " };
+        let style = if i == selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::styled(format!("{marker} [{key}] {desc}"), style));
     }
-
-    let trace_line = app
-        .last_trace
-        .as_ref()
-        .map(format_trace)
-        .unwrap_or_else(|| "Type A-Z to encipher — the signal path appears here.".to_string());
+    lines.push(Line::from(""));
+    lines.push(Line::from(format!("defaults: {prefill_summary}")));
     frame.render_widget(
-        Paragraph::new(trace_line).wrap(Wrap { trim: false }).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Signal path "),
-        ),
-        rows[2],
-    );
-
-    let panes = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[3]);
-    frame.render_widget(
-        Paragraph::new(app.input_text())
-            .wrap(Wrap { trim: false })
-            .block(Block::default().borders(Borders::ALL).title(" Input ")),
-        panes[0],
-    );
-    frame.render_widget(
-        Paragraph::new(app.output_text())
-            .wrap(Wrap { trim: false })
-            .block(Block::default().borders(Borders::ALL).title(" Output ")),
-        panes[1],
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(" Modes ")),
+        rows[1],
     );
 
     frame.render_widget(
-        Paragraph::new("Type A-Z to encipher • Backspace undo • Ctrl-R reset • Esc quit").block(
+        Paragraph::new("↑↓ move • Enter open • 1/2/3 shortcut • Q quit").block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Keys ")
                 .style(Style::default().fg(Color::DarkGray)),
         ),
-        rows[4],
+        rows[2],
     );
 }
 
-fn run_tui(app: &mut App) -> io::Result<()> {
+fn menu_loop(prefill: &Prefill) -> io::Result<()> {
+    let summary = format!(
+        "rotors {} • rings {} • pos {} • reflector {} • lang {}",
+        if prefill.rotors.is_empty() {
+            "I II III".to_string()
+        } else {
+            prefill.rotors.join(" ")
+        },
+        prefill.rings.as_deref().unwrap_or("AAA"),
+        prefill.positions.as_deref().unwrap_or("AAA"),
+        prefill.reflector.as_deref().unwrap_or("B"),
+        prefill.lang.as_deref().unwrap_or("de"),
+    );
+    let mut selected = 0usize;
+    loop {
+        // One terminal session per menu visit; mode screens manage their own
+        // sessions and return here afterwards.
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        let choice = (|| -> io::Result<Option<usize>> {
+            loop {
+                terminal.draw(|f| draw_menu(f, selected, &summary))?;
+                let Event::Key(key) = event::read()? else {
+                    continue;
+                };
+                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+                    std::process::exit(0);
+                }
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                        return Ok(None);
+                    }
+                    KeyCode::Up => {
+                        selected = selected.saturating_sub(1);
+                    }
+                    KeyCode::Down => {
+                        selected = (selected + 1).min(MENU_ITEMS.len() - 1);
+                    }
+                    KeyCode::Enter => return Ok(Some(selected)),
+                    KeyCode::Char('1') => return Ok(Some(0)),
+                    KeyCode::Char('2') => return Ok(Some(1)),
+                    KeyCode::Char('3') => return Ok(Some(2)),
+                    _ => {}
+                }
+            }
+        })();
+
+        disable_raw_mode()?;
+        execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+        terminal.show_cursor()?;
+
+        match choice? {
+            None => return Ok(()),
+            Some(0) => run_mode(FormMode::Type, prefill)?,
+            Some(1) => run_mode(FormMode::Crib, prefill)?,
+            Some(2) => run_mode(FormMode::Blind, prefill)?,
+            Some(_) => {}
+        }
+    }
+}
+
+/// Form screen → validated config → mode screen → back to menu.
+fn run_mode(mode: FormMode, prefill: &Prefill) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -231,25 +218,38 @@ fn run_tui(app: &mut App) -> io::Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let result = (|| -> io::Result<()> {
+        let mut form = ConfigForm::new(mode, prefill);
         loop {
-            terminal.draw(|f| draw(f, app))?;
+            terminal.draw(|f| draw_form(f, &form))?;
             let Event::Key(key) = event::read()? else {
                 continue;
             };
-            // Ctrl-C quits from anywhere.
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                return Ok(());
+                std::process::exit(0);
+            }
+            if form.editing {
+                match key.code {
+                    KeyCode::Enter => form.toggle_edit(),
+                    KeyCode::Esc => form.toggle_edit(),
+                    KeyCode::Backspace => form.backspace(),
+                    KeyCode::Char(c) if key.modifiers.is_empty() => form.push_char(c),
+                    _ => {}
+                }
+                continue;
             }
             match key.code {
+                KeyCode::Up => form.move_up(),
+                KeyCode::Down => form.move_down(),
+                KeyCode::Tab => form.move_down(),
+                KeyCode::BackTab => form.move_up(),
+                KeyCode::Enter => form.toggle_edit(),
                 KeyCode::Esc => return Ok(()),
-                KeyCode::Backspace => app.backspace(),
-                KeyCode::Char('r') | KeyCode::Char('R')
-                    if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                {
-                    app.reset();
-                }
-                KeyCode::Char(c) if c.is_ascii_alphabetic() && key.modifiers.is_empty() => {
-                    app.type_letter(c.to_ascii_uppercase());
+                KeyCode::F(5) => {
+                    // Validated: leave the form session; the mode screen
+                    // runs its own session and we return to the menu after.
+                    if let Some(ready) = start_mode(&mut form)? {
+                        return launch(ready);
+                    }
                 }
                 _ => {}
             }
@@ -262,148 +262,130 @@ fn run_tui(app: &mut App) -> io::Result<()> {
     result
 }
 
-fn main() {
-    let cli = Cli::parse();
-    match cli.command {
-        Some(TuiCommand::SolveCrib(args)) => {
-            if let Err(e) = run_solve_screen(args) {
-                eprintln!("enigma-tui: {e}");
-                std::process::exit(1);
-            }
-        }
-        None => {
-            let t = &cli.type_args;
-            if t.rotors.is_empty() {
-                eprintln!("enigma-tui: --rotors I II III required (or use solve-crib)");
-                std::process::exit(2);
-            }
-            let names: Vec<&str> = t.rotors.iter().map(String::as_str).collect();
-            let config = match MachineConfig::from_strings(
-                &names,
-                &t.rings,
-                &t.pos,
-                &t.reflector,
-                &t.plugs,
-                &t.etw,
-            ) {
-                Ok(c) => c,
+/// Validate the form and build the mode input. Errors stay on the form.
+fn start_mode(form: &mut ConfigForm) -> io::Result<Option<Ready>> {
+    let ready = match form.mode {
+        FormMode::Type => match form.build_type() {
+            Ok((cfg, echo)) => match crate::app::App::new(cfg, echo) {
+                Ok(app) => Ready::Type(app),
                 Err(e) => {
-                    eprintln!("enigma-tui: {e}");
-                    std::process::exit(1);
+                    form.error = Some(e.to_string());
+                    return Ok(None);
                 }
-            };
-            let mut app = match App::new(config, t.rotors.clone()) {
-                Ok(a) => a,
-                Err(e) => {
-                    eprintln!("enigma-tui: {e}");
-                    std::process::exit(1);
-                }
-            };
-            if let Err(e) = run_tui(&mut app) {
-                eprintln!("enigma-tui: {e}");
-                std::process::exit(1);
+            },
+            Err(e) => {
+                form.error = Some(e);
+                return Ok(None);
             }
-        }
+        },
+        FormMode::Crib => match form.build_crib() {
+            Ok((cfg, lang, subtitle)) => Ready::Crib(cfg, lang, subtitle),
+            Err(e) => {
+                form.error = Some(e);
+                return Ok(None);
+            }
+        },
+        FormMode::Blind => match form.build_blind() {
+            Ok((cfg, lang, subtitle)) => Ready::Blind(cfg, lang, subtitle),
+            Err(e) => {
+                form.error = Some(e);
+                return Ok(None);
+            }
+        },
+    };
+    form.error = None;
+    Ok(Some(ready))
+}
+
+/// Hand a validated config to its screen (own terminal session inside).
+fn launch(ready: Ready) -> io::Result<()> {
+    match ready {
+        Ready::Type(mut app) => crate::type_ui::run_type(&mut app),
+        Ready::Crib(cfg, lang, subtitle) => crate::solve_ui::run_crib(cfg, lang, subtitle),
+        Ready::Blind(cfg, lang, subtitle) => crate::solve_ui::run_blind(cfg, lang, subtitle),
     }
 }
 
-enum SolveMsg {
-    Tick(usize, usize),
-    Done,
-    Failed(String),
+fn display_value(value: &str) -> String {
+    // Long cipher pastes would drown the form; show the tail.
+    if value.chars().count() > 80 {
+        format!(
+            "…{}",
+            value
+                .chars()
+                .skip(value.chars().count() - 77)
+                .collect::<String>()
+        )
+    } else {
+        value.to_string()
+    }
 }
 
-struct SolveScreen {
-    subtitle: String,
-    crib_len: usize,
-    done: usize,
-    total: usize,
-    started: Instant,
-    checkpoint: PathBuf,
-    finished: bool,
-    error: Option<String>,
-}
-
-fn draw_solve(frame: &mut Frame, s: &SolveScreen) {
+fn draw_form(frame: &mut Frame, form: &ConfigForm) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header
-            Constraint::Length(3), // progress gauge
-            Constraint::Min(6),    // candidates
-            Constraint::Length(3), // help
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(3),
+            Constraint::Length(3),
         ])
         .split(frame.area());
 
     frame.render_widget(
-        Paragraph::new(s.subtitle.clone()).block(
+        Paragraph::new("Edit each field, then F5 to start.").block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Crib search "),
+                .title(format!(" {} ", form.title())),
         ),
         rows[0],
     );
 
-    let ratio = if s.total == 0 {
-        0.0
-    } else {
-        (s.done as f64 / s.total as f64).clamp(0.0, 1.0)
-    };
+    let mut lines = Vec::new();
+    for (i, field) in form.fields.iter().enumerate() {
+        let cursor = if i == form.cursor { ">" } else { " " };
+        let editing = if i == form.cursor && form.editing {
+            " *editing*"
+        } else {
+            ""
+        };
+        let style = if i == form.cursor {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::styled(
+            format!(
+                "{cursor} {:<12} {:<30} ({}){editing}",
+                field.label,
+                display_value(&field.value),
+                field.hint
+            ),
+            style,
+        ));
+    }
     frame.render_widget(
-        Gauge::default()
-            .block(Block::default().borders(Borders::ALL).title(" Progress "))
-            .gauge_style(Style::default().fg(Color::Yellow))
-            .ratio(ratio)
-            .label(format!(
-                "{}/{} orders • {:.0}s",
-                s.done,
-                s.total,
-                s.started.elapsed().as_secs_f32()
-            )),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .block(Block::default().borders(Borders::ALL).title(" Settings ")),
         rows[1],
     );
 
-    // Live best list comes from the worker's checkpoint file (written per
-    // finished rotor order), so the UI needs no shared solver state.
-    let mut lines: Vec<Line> = Vec::new();
-    if let Some(ckpt) = load_checkpoint(&s.checkpoint) {
-        for (i, cand) in ckpt.best.iter().enumerate() {
-            lines.push(Line::from(format!(
-                "#{} {} pos {} matches {}/{} score {:.1}",
-                i + 1,
-                cand.order.join(" "),
-                candidate_positions(cand),
-                cand.matches,
-                s.crib_len,
-                cand.score
-            )));
-        }
-    }
-    if lines.is_empty() {
-        lines.push(Line::from(if s.finished {
-            "search finished — no candidates (try a longer crib)".to_string()
-        } else {
-            "searching — first candidates appear after the first rotor order...".to_string()
-        }));
-    }
-    let title = if s.finished {
-        " Results "
-    } else {
-        " Top candidates (live) "
-    };
+    let error: &str = form.error.as_deref().unwrap_or("");
     frame.render_widget(
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(title)),
+        Paragraph::new(error).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Status ")
+                .style(Style::default().fg(Color::Red)),
+        ),
         rows[2],
     );
 
-    let help = if let Some(e) = &s.error {
-        format!("FAILED: {e} • Q/Esc quit")
-    } else {
-        "Q/Esc quit (quitting stops the display; the search thread ends with the process)"
-            .to_string()
-    };
     frame.render_widget(
-        Paragraph::new(help).block(
+        Paragraph::new("↑↓/Tab move • Enter edit • Esc back • F5 start • Ctrl-C quit").block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Keys ")
@@ -411,110 +393,4 @@ fn draw_solve(frame: &mut Frame, s: &SolveScreen) {
         ),
         rows[3],
     );
-}
-
-fn candidate_positions(cand: &CribCandidate) -> String {
-    cand.positions_str()
-}
-
-/// Run a crib search on a worker thread; this thread renders progress.
-/// Quitting ends the process along with the worker; rerun the same search
-/// through the CLI with `--checkpoint-file` to resume where it stopped.
-fn run_solve_screen(args: SolveTuiArgs) -> io::Result<()> {
-    let lang =
-        Lang::parse(&args.lang).map_err(|m| io::Error::new(io::ErrorKind::InvalidInput, m))?;
-    let cfg = build_crib_config(
-        &args.rotors,
-        args.fourth.as_deref(),
-        &args.rings,
-        &args.reflector,
-        &args.plugs,
-        &args.etw,
-        &args.cipher,
-        &args.crib,
-        args.crib_offset,
-        args.top,
-        None,
-    )
-    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
-    let crib_len = cfg.crib.len();
-    let subtitle = format!(
-        "pool {} • crib {} chars • lang {}",
-        args.rotors.join(" "),
-        crib_len,
-        args.lang,
-    );
-    let checkpoint: PathBuf =
-        std::env::temp_dir().join(format!("enigma-tui-solve-{}.json", std::process::id()));
-
-    let (tx, rx) = mpsc::channel::<SolveMsg>();
-    let ckpt_path = checkpoint.clone();
-    std::thread::spawn(move || {
-        let scorer = QuadgramScorer::new(lang);
-        let cb = |done: usize, total: usize| {
-            let _ = tx.send(SolveMsg::Tick(done, total));
-        };
-        match solve_crib(&cfg, &scorer, Some(&ckpt_path), Some(&cb)) {
-            Ok(_) => {
-                let _ = tx.send(SolveMsg::Done);
-            }
-            Err(e) => {
-                let _ = tx.send(SolveMsg::Failed(e.to_string()));
-            }
-        }
-    });
-
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let mut screen = SolveScreen {
-        subtitle,
-        crib_len,
-        done: 0,
-        total: 1,
-        started: Instant::now(),
-        checkpoint: checkpoint.clone(),
-        finished: false,
-        error: None,
-    };
-    let result = (|| -> io::Result<()> {
-        loop {
-            // Drain progress messages without blocking the UI.
-            for msg in rx.try_iter() {
-                match msg {
-                    SolveMsg::Tick(done, total) => {
-                        screen.done = done;
-                        screen.total = total.max(1);
-                    }
-                    SolveMsg::Done => screen.finished = true,
-                    SolveMsg::Failed(e) => {
-                        screen.finished = true;
-                        screen.error = Some(e);
-                    }
-                }
-            }
-            terminal.draw(|f| draw_solve(f, &screen))?;
-            if event::poll(Duration::from_millis(120))? {
-                let Event::Key(key) = event::read()? else {
-                    continue;
-                };
-                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                    return Ok(());
-                }
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
-                    _ => {}
-                }
-            }
-        }
-    })();
-
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-    let _ = std::fs::remove_file(&checkpoint);
-    result
 }

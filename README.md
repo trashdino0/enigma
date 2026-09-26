@@ -34,7 +34,7 @@ Requires stable Rust (developed on 1.98). Solvers are CPU-heavy: use
 ```sh
 cargo build                 # debug binaries in target/debug/
 cargo build --release       # optimized binaries in target/release/
-cargo test --workspace      # 55 tests
+cargo test --workspace      # 60 tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo bench -p enigma-solver   # hot-loop baselines (release)
@@ -102,16 +102,29 @@ time and demo with `--release`.
 
 ## TUI
 
-```sh
-enigma-tui --rotors I II III --rings AAA --pos AAA --reflector B
-# Type A-Z to encipher with live rotor windows and a per-stage signal path.
-# Backspace undoes (rebuild + replay), Ctrl-R resets, Esc quits.
+Menu-driven — no flags required; everything is configured in forms. CLI
+flags only prefill the forms.
 
-enigma-tui solve-crib --rotors I II III --crib MORGENGRAUEN \
-  --cipher HJUBMYDCQWJVUQUOERQPSVOVZVYUBQAUEXZVFSKOMPEPRZXYNRBNMJWTBJMWFIA --lang de
-# Progress gauge + live top candidates. Q/Esc quits (worker ends with the UI;
-# resume long searches via the CLI --checkpoint-file).
+```sh
+enigma-tui
+enigma-tui --rotors I II III --reflector B --lang de   # prefills
 ```
+
+The menu offers three modes:
+
+1. **Type** — encipher interactively with live rotor windows and a per-stage
+   signal path. Form: rotors, rings, positions, reflector, plugs, entry wheel.
+   Keys: type `A-Z`, `Backspace` undoes, `Ctrl-R` resets, `Esc` back to menu.
+2. **Solve (crib)** — known-plaintext search with progress gauge and live top
+   candidates. Form adds: rotor pool (always permuted), M4 fourth, language,
+   ciphertext, crib, crib offset, winner count.
+3. **Solve (blind)** — pool search with scan/climb/order stage counters and
+   live winners. Form adds plug cap, top positions, restarts, seed.
+
+Form keys: `↑↓`/`Tab` move, `Enter` edits, `Esc` goes back, `F5` validates and
+starts (validation errors stay on the form). `Q`/`Esc` in a solve screen ends
+the search and returns to the menu — resume long searches through the CLI
+`--checkpoint-file`.
 
 ## Manual testing walkthrough
 
@@ -127,8 +140,9 @@ enigma-tui solve-crib --rotors I II III --crib MORGENGRAUEN \
    → expect `#1 ... pos MKL plugs AV BS CG` and the full weather report.
 7. Break it on purpose: duplicate rotors (`--rotors I I II`), 11 plug pairs,
    crib longer than cipher — each must fail with a one-line `enigma: ...` message.
-8. TUI: launch, type `AAAAA`, watch windows show `A A F` and output `BDZGO`;
-   try `solve-crib` mode with the cipher from step 5.
+8. TUI: launch `enigma-tui`, open Type, type `AAAAA`, watch windows show
+   `A A F` and output `BDZGO`; open Solve (crib), fill cipher + crib from
+   step 5, `F5`, watch `#1 order I II III pos KDO` appear.
 
 ## Development
 

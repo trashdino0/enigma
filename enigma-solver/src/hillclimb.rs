@@ -68,6 +68,9 @@ pub struct BlindCandidate {
     pub plaintext: String,
 }
 
+/// One climbed restart: `(positions, plugs, score)`.
+type ClimbOut = (Vec<u8>, Vec<(u8, u8)>, f32);
+
 /// Minimal deterministic PRNG (xorshift64*) — avoids a `rand` dependency.
 #[derive(Debug, Clone)]
 struct XorShift64(u64);
@@ -277,17 +280,32 @@ fn random_start(rng: &mut XorShift64, max_plugs: usize) -> Vec<(u8, u8)> {
         .collect()
 }
 
+/// Blind search progress, reported through the `on_progress` callback:
+/// coarse enough to stay cheap (scan ticks every 2048 positions).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlindProgress {
+    /// Unplugged position scan: `(positions_done, positions_total)`.
+    Scan { done: usize, total: usize },
+    /// Plug climb: `(positions_climbed, positions_kept)`.
+    Climb { done: usize, total: usize },
+    /// Pool order finished: `(orders_done, orders_total)`.
+    Order { done: usize, total: usize },
+}
+
 /// Ciphertext-only search. Returns the top `top_n` by
 /// `(score desc, positions asc, plugs asc)` — deterministic for a fixed seed.
 pub fn solve_blind(
     cfg: &BlindConfig,
     scorer: &QuadgramScorer,
+    on_progress: Option<&(dyn Fn(BlindProgress) + Sync)>,
 ) -> Result<Vec<BlindCandidate>, EnigmaError> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     let parts = SearchParts::build(cfg)?;
     let n = parts.rotor_count;
     let total_positions: usize = 26usize.pow(n as u32);
 
     // Stage 1: unplugged scan over every position.
+    let scanned_tick = AtomicUsize::new(0);
     let mut scanned: Vec<(f32, Vec<u8>)> = (0..total_positions)
         .into_par_iter()
         .map(|pos_idx| {
@@ -298,6 +316,15 @@ pub fn solve_blind(
                 rest /= 26;
             }
             let plain = parts.decrypt(&digits, &[], &cfg.cipher);
+            let done = scanned_tick.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(cb) = on_progress {
+                if done.is_multiple_of(2048) || done == total_positions {
+                    cb(BlindProgress::Scan {
+                        done,
+                        total: total_positions,
+                    });
+                }
+            }
             (scorer.score_bytes(&plain), digits)
         })
         .collect();
@@ -309,6 +336,8 @@ pub fn solve_blind(
     scanned.truncate(cfg.top_positions.max(1));
 
     // Stage 2: plug climb per surviving position x restart.
+    let climbed_tick = AtomicUsize::new(0);
+    let climb_total = scanned.len();
     let mut results: Vec<BlindCandidate> = scanned
         .into_par_iter()
         .flat_map(|(_, positions)| {
@@ -321,7 +350,7 @@ pub fn solve_blind(
                 }
                 v
             };
-            restarts
+            let climbed: Vec<ClimbOut> = restarts
                 .into_par_iter()
                 .map(|start| {
                     let (plugs, score) = climb(
@@ -334,7 +363,15 @@ pub fn solve_blind(
                     );
                     (positions.clone(), plugs, score)
                 })
-                .collect::<Vec<_>>()
+                .collect();
+            let done = climbed_tick.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(cb) = on_progress {
+                cb(BlindProgress::Climb {
+                    done,
+                    total: climb_total,
+                });
+            }
+            climbed
         })
         .map(|(positions, plugs, score)| {
             let plain = parts.decrypt(&positions, &plugs, &cfg.cipher);
@@ -400,6 +437,7 @@ pub struct BlindPoolConfig {
 pub fn solve_blind_pool(
     cfg: &BlindPoolConfig,
     scorer: &QuadgramScorer,
+    on_progress: Option<&(dyn Fn(BlindProgress) + Sync)>,
 ) -> Result<Vec<BlindCandidate>, EnigmaError> {
     if cfg.rotor_pool.len() < 3 {
         return Err(EnigmaError::SolverSetup(format!(
@@ -433,25 +471,39 @@ pub fn solve_blind_pool(
         })
         .collect();
 
-    let mut merged: Vec<BlindCandidate> = orders
-        .into_par_iter()
-        .enumerate()
-        .flat_map(|(idx, order)| {
-            let single = BlindConfig {
-                cipher: cfg.cipher.clone(),
-                order,
-                rings: cfg.rings.clone(),
-                reflector: cfg.reflector,
-                etw: cfg.etw.clone(),
-                max_plugs: cfg.max_plugs,
-                top_positions: cfg.top_positions,
-                restarts: cfg.restarts,
-                seed: cfg.seed ^ (idx as u64).wrapping_mul(0x9E3779B97F4A7C15),
-                top_n: cfg.per_order_top,
-            };
-            solve_blind(&single, scorer).unwrap_or_default()
-        })
-        .collect();
+    let mut merged: Vec<BlindCandidate> = {
+        use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+        let order_tick = AtomicUsize::new(0);
+        let order_total = orders.len();
+        orders
+            .into_par_iter()
+            .enumerate()
+            .flat_map(|(idx, order)| {
+                let single = BlindConfig {
+                    cipher: cfg.cipher.clone(),
+                    order,
+                    rings: cfg.rings.clone(),
+                    reflector: cfg.reflector,
+                    etw: cfg.etw.clone(),
+                    max_plugs: cfg.max_plugs,
+                    top_positions: cfg.top_positions,
+                    restarts: cfg.restarts,
+                    seed: cfg.seed ^ (idx as u64).wrapping_mul(0x9E3779B97F4A7C15),
+                    top_n: cfg.per_order_top,
+                };
+                // Inner progress stays silent; the pool reports per order.
+                let out = solve_blind(&single, scorer, None).unwrap_or_default();
+                let done = order_tick.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+                if let Some(cb) = on_progress {
+                    cb(BlindProgress::Order {
+                        done,
+                        total: order_total,
+                    });
+                }
+                out
+            })
+            .collect()
+    };
 
     merged.par_sort_by(|a, b| {
         b.score
@@ -512,7 +564,7 @@ mod tests {
             top_n: 3,
         };
         let scorer = QuadgramScorer::new(Lang::En);
-        let best = solve_blind(&cfg, &scorer).unwrap();
+        let best = solve_blind(&cfg, &scorer, None).unwrap();
         assert!(!best.is_empty());
         let top = &best[0];
         let expected: String = EN_TEXT
@@ -548,7 +600,7 @@ mod tests {
             top_n: 1,
         };
         let scorer = QuadgramScorer::new(Lang::En);
-        assert!(solve_blind(&cfg, &scorer).is_err());
+        assert!(solve_blind(&cfg, &scorer, None).is_err());
     }
 
     #[test]
@@ -574,7 +626,7 @@ mod tests {
             top_n: 2,
         };
         let scorer = QuadgramScorer::new(Lang::En);
-        let best = solve_blind_pool(&cfg, &scorer).unwrap();
+        let best = solve_blind_pool(&cfg, &scorer, None).unwrap();
         assert!(!best.is_empty());
         assert_eq!(best[0].order, vec!["II", "I", "III"]);
         assert_eq!(best[0].positions, vec![1, 13, 10], "BNK recovered");
