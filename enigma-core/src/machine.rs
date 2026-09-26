@@ -3,8 +3,7 @@
 //! Rotor order is **left -> right**: index 0 is the slow leftmost rotor,
 //! the last index is the fast rightmost rotor. For M4 the index-0 thin rotor
 //! (Beta/Gamma) is manually settable and **never steps** — only three pawls
-//! exist, so [`EnigmaMachine::step_rotors`] advances only the three rightmost
-//! rotors.
+//! exist, so stepping advances only the three rightmost rotors.
 //!
 //! # Stepping (pawl / ratchet, with double-stepping anomaly)
 //!

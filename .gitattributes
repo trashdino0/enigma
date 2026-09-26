@@ -1,0 +1,4 @@
+# Normalize line endings on checkout, but never touch the n-gram tables
+# (byte-stable parsing everywhere).
+* text=auto
+enigma-solver/data/*.txt -text
