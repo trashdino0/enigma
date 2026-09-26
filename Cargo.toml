@@ -1,0 +1,6 @@
+[workspace]
+members = ["enigma-core", "enigma-cli", "enigma-tui", "enigma-solver"]
+resolver = "2"
+
+[profile.release]
+lto = true

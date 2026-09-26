@@ -1,0 +1,10 @@
+[package]
+name = "enigma-core"
+version = "0.1.0"
+edition = "2021"
+description = "Historically exact Enigma M3/M4 core: rotors, reflectors, entry wheel (no heap in hot loop)"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+
+[dev-dependencies]

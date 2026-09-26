@@ -1,0 +1,19 @@
+# Rust build output
+/target/
+**/target/
+
+# Solver checkpoints (local resume state, not source)
+/checkpoints/
+*.checkpoint.json
+enigma_crib_*.json
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Benchmark artifacts (regenerable)
+criterion/

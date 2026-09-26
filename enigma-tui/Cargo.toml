@@ -1,0 +1,17 @@
+[package]
+name = "enigma-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Interactive Enigma M3/M4 terminal: live stepping + signal-path view"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "enigma-tui"
+path = "src/main.rs"
+
+[dependencies]
+enigma-core = { path = "../enigma-core" }
+enigma-solver = { path = "../enigma-solver" }
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.28"
