@@ -419,6 +419,9 @@ fn poll_quit() -> io::Result<bool> {
         let Event::Key(key) = event::read()? else {
             return Ok(false);
         };
+        if !crate::keys::is_press(&key) {
+            return Ok(false);
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             std::process::exit(0);
         }

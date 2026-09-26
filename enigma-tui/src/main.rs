@@ -11,6 +11,7 @@
 
 mod app;
 mod config_form;
+mod keys;
 mod solve_ui;
 mod type_ui;
 
@@ -173,6 +174,9 @@ fn menu_loop(prefill: &Prefill) -> io::Result<()> {
                 let Event::Key(key) = event::read()? else {
                     continue;
                 };
+                if !crate::keys::is_press(&key) {
+                    continue;
+                }
                 if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
                     std::process::exit(0);
                 }
@@ -224,6 +228,9 @@ fn run_mode(mode: FormMode, prefill: &Prefill) -> io::Result<()> {
             let Event::Key(key) = event::read()? else {
                 continue;
             };
+            if !crate::keys::is_press(&key) {
+                continue;
+            }
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
                 std::process::exit(0);
             }

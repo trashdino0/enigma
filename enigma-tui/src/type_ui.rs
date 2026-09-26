@@ -128,6 +128,9 @@ pub fn run_type(app: &mut App) -> io::Result<()> {
             let Event::Key(key) = event::read()? else {
                 continue;
             };
+            if !crate::keys::is_press(&key) {
+                continue;
+            }
             // Ctrl-C quits the whole application.
             if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
                 std::process::exit(0);
