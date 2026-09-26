@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p enigma-gui -p enigma-cli -p enigma-tui
+      - run: >
+          gh release create "${{ github.ref_name }}"
+          --title "${{ github.ref_name }}"
+          --notes "Enigma M3/M4 workbench: desktop GUI plus CLI and TUI."
+          target/release/enigma-gui.exe
+          target/release/enigma.exe
+          target/release/enigma-tui.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

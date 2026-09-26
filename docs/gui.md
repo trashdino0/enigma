@@ -1,0 +1,37 @@
+# GUI guide (`enigma-gui`)
+
+Launch with `cargo run --release -p enigma-gui` (or the `enigma-gui.exe`
+from the Releases page). Three tabs across the top.
+
+## Machine tab
+
+Left panel: rotor slots 1–3 (`I`–`VIII`), optional 4th (`Beta`/`Gamma` for M4,
+needs a thin reflector), reflector and entry-wheel dropdowns, rings,
+positions, and plugs (`AV BS CG`, empty = unpatched). **Load machine**
+validates everything — contradictions appear as a red inline error.
+
+Typing area: input box, output box, big rotor-window letters, and the
+per-stage signal path (`IN → plug → ETW → rotors → reflector → back → out`)
+for the last keypress. Typing one letter enciphers once; deletes, pastes, and
+mid-text edits rewind to the start positions and replay (rotor stepping is
+one-way, like the real machine). **Clear** empties the buffers and rewinds.
+
+## Crib solver tab
+
+Form: rotor pool (permuted, taken 3 per order), M4 fourth, rings, reflector,
+assumed-known plugs, entry wheel, language, ciphertext and crib boxes, crib
+offset (empty scans every offset), winner count. **Start search** runs on a
+background thread: progress bar counts finished rotor orders, the results
+table fills live, and clicking a row shows a decrypt preview. See
+[solvers](solvers.md) for what the settings mean.
+
+## Blind solver tab
+
+Form: pool, fourth, rings, reflector, entry wheel, language, ciphertext, plug
+cap (`0` = positions only), top positions per order, restarts, seed, winner
+count. Progress shows scan/climb/order counters; winners list order,
+positions, plugs, score, and a plaintext preview. Ciphertexts shorter than 25
+letters are rejected; ~150+ characters give reliable results.
+
+Quitting the app ends any running search. Resume long crib searches through
+the CLI `--checkpoint-file` instead.

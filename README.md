@@ -1,186 +1,87 @@
-# Enigma M3/M4 — machine, solvers, CLI and TUI
+# Enigma M3/M4 — encrypt messages like it's 1941
 
 [![CI](https://github.com/trashdino0/enigma/actions/workflows/ci.yml/badge.svg)](https://github.com/trashdino0/enigma/actions/workflows/ci.yml)
 
-A historically exact Enigma machine (Wehrmacht M3 + Naval M4) in Rust, with
-known-plaintext (crib) and ciphertext-only (blind) solvers, a CLI, and an
-interactive terminal. Zero heap allocations in the encipher/score hot loops;
-search parallelized with rayon.
+The Enigma was the cipher machine behind Germany's WWII secret radio
+traffic. This app recreates it faithfully on your computer: set it up exactly
+like an operator would, type a message, and watch it turn into gibberish that
+only someone with the same settings can decode. It can also *break* messages —
+give it a ciphertext and it will hunt down the settings for you.
 
-- **Exact stepping**: double-stepping anomaly, `Ringstellung` wiring offset with
-  ring-independent turnover, reciprocal plugboard (≤ 10 pairs).
-- **Full coverage**: rotors I–VIII + Beta/Gamma, reflectors B/C + Thin-B/C,
-  identity (Wehrmacht/Naval) and QWERTZ (D/K/Railway) entry wheels, custom
-  rotor/reflector/ETW definitions.
-- **Solvers**: crib search over rotor orders × positions with JSON checkpoint
-  resume; blind attack via position scan + plugboard hill-climb; German
-  (default) and English quadgram scoring, embedded in the binary.
+No technical knowledge needed. Everything below happens in a normal desktop
+window with buttons and text boxes.
 
-## Layout
+## Get the app
 
-| Crate          | What it is                                              |
-|----------------|---------------------------------------------------------|
-| `enigma-core`  | Zero-dependency library: rotors, reflector, ETW, plugboard, machine, config |
-| `enigma-solver`| Crib + blind solvers, quadgram scoring (`rayon`, `serde`) |
-| `enigma-cli`   | `enigma` binary: encrypt/decrypt/solve-crib/solve-blind |
-| `enigma-tui`   | `enigma-tui` binary: live typing + signal path, crib progress view |
-| `enigma-gui`   | `enigma-gui` binary: desktop workbench (machine + crib + blind tabs) |
-| `examples/`    | Demo plaintext/cipher pairs used below                   |
+**Option A — download (easiest, once a release exists):** open the
+[Releases page](https://github.com/trashdino0/enigma/releases), download
+`enigma-gui.exe`, and double-click it. No installation.
 
-## Build
-
-Requires stable Rust (developed on 1.98). Solvers are CPU-heavy: use
-`--release` for anything beyond the unit tests.
-
-```sh
-cargo build                 # debug binaries in target/debug/
-cargo build --release       # optimized binaries in target/release/
-cargo test --workspace      # 63 tests
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all -- --check
-cargo bench -p enigma-solver   # hot-loop baselines (release)
-```
-
-## Machine usage
-
-Rotor order is left → right (last = fast). M4 takes a non-stepping
-Beta/Gamma 4th rotor first plus a thin reflector.
-
-```sh
-# Known-answer vector: I II III, AAA/AAA, UKW-B, no plugs
-enigma encrypt --rotors I II III --rings AAA --pos AAA --reflector B --text AAAAA
-# BDZGO
-
-# Decrypting is the same operation with the same settings
-enigma decrypt --rotors I II III --rings AAA --pos AAA --reflector B --text BDZGO
-# AAAAA
-
-# M4 Naval example (4th rotor never steps)
-enigma encrypt --rotors Beta I II III --rings AAAA --pos AAAA \
-  --reflector Thin-B --text HELLOWORLD
-# ILBDAAMTAZ
-
-# Files and pipes: --text beats --input beats stdin; --output writes a file
-enigma encrypt --rotors I II III --pos KDO --reflector B \
-  --plugs "AV BS CG" --input msg.txt --output cipher.txt
-echo HELLO | enigma encrypt --rotors I II III --pos AAA --reflector B
-```
-
-Letters are uppercased; anything else passes through **without** stepping the
-rotors. Umlauts are not transliterated — write `AE/OE/UE/SS` yourself.
-
-## Solver usage
-
-Rings, reflector, plugs (crib), and entry wheel are fixed inputs; the search
-recovers orders and positions (plus plugs in blind mode). `--lang de|en`
-selects the scoring table (German default — the historical language).
-
-```sh
-# Crib: known plaintext fragment, scans every offset by default
-enigma solve-crib --rotors I II III --crib MORGENGRAUEN \
-  --input examples/crib_cipher.txt --lang de --top 3
-# #1 order I II III pos KDO matches 12/12 score -543.0
-
-# ...with a fixed crib offset, JSON output, and resume support for long runs
-enigma solve-crib --rotors I II III IV V --crib WETTER --crib-offset 4 \
-  --input cipher.txt --checkpoint-file crib.json --output-json winners.json
-
-# Blind: fixed order, recovers positions AND plugs (needs ~150+ chars)
-enigma solve-blind --rotors I II III --input examples/blind_cipher.txt \
-  --lang en --max-plugs 6 --top-positions 8 --restarts 3 --top 2
-# #1 order I II III pos MKL plugs AV BS CG score -2791.1
-#   THEWEATHERREPORT...
-
-# Blind over a rotor pool instead of a fixed order (M4 via --fourth Beta)
-enigma solve-blind --pool I II III --input examples/blind_cipher.txt --lang en \
-  --max-plugs 0 --top-positions 3 --top 1 --restarts 0
-# #1 order I II III pos MKL ...   (plugs unknown here, so text stays garbled)
-```
-
-Measured on a modern desktop (release): the crib demo above ≈ 0.15 s, the
-blind demo ≈ 0.25 s. Debug builds are an order of magnitude slower — always
-time and demo with `--release`.
-
-## GUI
-
-Prefer windows over terminals? The desktop app has the same three areas as
-tabs, with dropdowns instead of typed settings:
+**Option B — run from source:** install Rust once from
+[rustup.rs](https://rustup.rs), then in this folder run:
 
 ```sh
 cargo run --release -p enigma-gui
 ```
 
-- **Machine** — rotor/reflector/entry-wheel dropdowns, rings/positions/plugs
-  fields, `Load machine`, then type in the input box: rotor windows, output,
-  and the per-stage signal path update live. Edits, pastes, and deletes
-  re-sync by rewind + replay.
-- **Crib solver** — pool/fourth/rings/reflector/plugs/language/cipher/crib
-  form, `Start search`, progress bar, clickable results with a decrypt
-  preview.
-- **Blind solver** — pool form plus plug cap/positions/restarts/seed,
-  scan/climb/order progress, winners with full plaintext preview.
+## Take the tour (5 minutes)
 
-## TUI
+**1. Encrypt your first message.** Open the **Machine** tab. Everything is
+already set to a valid machine, so just press **Load machine**, type `AAAAA`
+in the input box, and watch the output read `BDZGO` while the little rotor
+windows step forward with every letter. That exact result is even a published
+historical test — your machine agrees with the real thing.
 
-Menu-driven — no flags required; everything is configured in forms. CLI
-flags only prefill the forms.
+**2. Scramble it properly.** Add plugboard pairs `AV BS CG`, change positions
+to `KDO`, press **Load machine** again, and type a sentence. Spaces pass
+through untouched; every letter comes out different — and no letter ever
+encrypts to itself, just like the original.
 
-```sh
-enigma-tui
-enigma-tui --rotors I II III --reflector B --lang de   # prefills
-```
+**3. Decrypt it back.** Encryption and decryption are the *same* operation
+here. Load the exact same settings on any machine and type in the gibberish:
+your message comes back out.
 
-The menu offers three modes:
+**4. Break a message.** Open the **Crib solver** tab. A "crib" is a guess at
+part of the message — operators often guessed words like weather reports.
+Copy the text from `examples/crib_cipher.txt` into the ciphertext box, type
+`MORGENGRAUEN` as the crib, press **Start search**, and watch it recover the
+full settings (`I II III`, positions `KDO`) in under a second.
 
-1. **Type** — encipher interactively with live rotor windows and a per-stage
-   signal path. Form: rotors, rings, positions, reflector, plugs, entry wheel.
-   Keys: type `A-Z`, `Backspace` undoes, `Ctrl-R` resets, `Esc` back to menu.
-2. **Solve (crib)** — known-plaintext search with progress gauge and live top
-   candidates. Form adds: rotor pool (always permuted), M4 fourth, language,
-   ciphertext, crib, crib offset, winner count.
-3. **Solve (blind)** — pool search with scan/climb/order stage counters and
-   live winners. Form adds plug cap, top positions, restarts, seed.
+**5. Break one with no clues.** Open the **Blind solver** tab, paste
+`examples/blind_cipher.txt`, set language to English, press **Start search**.
+With zero knowledge of the settings it finds the rotors, positions *and* the
+plugboard (`AV BS CG`) and prints the whole decrypted message.
 
-Form keys: `↑↓`/`Tab` move, `Enter` edits, `Esc` goes back, `F5` validates and
-starts (validation errors stay on the form). `Q`/`Esc` in a solve screen ends
-the search and returns to the menu — resume long searches through the CLI
-`--checkpoint-file`.
+## Concepts in plain words
 
-## Manual testing walkthrough
+- **Rotors** — the scrambling wheels inside the machine (named I–VIII, plus
+  Beta/Gamma for naval messages). Their *order* is part of the key.
+- **Positions** — the letters showing in the little windows; this is where
+  the wheels start, and they step as you type.
+- **Rings** — a fine adjustment to each wheel, set once per day.
+- **Plugs** — cables on the front panel that swap letter pairs before and
+  after scrambling (up to 10).
+- **Reflector** — the part that sends the signal back through the wheels,
+  which is why encrypting and decrypting are the same action.
 
-1. `cargo build --release`
-2. `enigma encrypt --rotors I II III --rings AAA --pos AAA --reflector B --text AAAAA` → expect `BDZGO`.
-3. Roundtrip: encrypt `examples/crib_plain.txt` with `--pos KDO`, decrypt the
-   result with the same flags → expect the original text back.
-4. M4: `HELLOWORLD` with `--rotors Beta I II III --rings AAAA --pos AAAA --reflector Thin-B`
-   → expect `ILBDAAMTAZ`; decrypt it back.
-5. Crib: `solve-crib --rotors I II III --crib MORGENGRAUEN --input examples/crib_cipher.txt --lang de`
-   → expect `#1 order I II III pos KDO matches 12/12`.
-6. Blind: `solve-blind --rotors I II III --input examples/blind_cipher.txt --lang en --max-plugs 6 --top-positions 8 --restarts 3`
-   → expect `#1 ... pos MKL plugs AV BS CG` and the full weather report.
-7. Break it on purpose: duplicate rotors (`--rotors I I II`), 11 plug pairs,
-   crib longer than cipher — each must fail with a one-line `enigma: ...` message.
-8. TUI: launch `enigma-tui`, open Type, type `AAAAA`, watch windows show
-   `A A F` and output `BDZGO`; open Solve (crib), fill cipher + crib from
-   step 5, `F5`, watch `#1 order I II III pos KDO` appear.
+New to all this? Read [the Enigma: history and how it works](docs/enigma.md)
+— a short history plus what every setting on the machine actually does.
 
-## Development
+## Something wrong?
 
-- `cargo test --workspace` — unit + integration tests (55).
-- `cargo bench -p enigma-solver` — baselines: `encipher_1k` ≈ 42 µs,
-  `score_1k` ≈ 1.8 µs (release). Measure before/after every optimization.
-- `cargo doc -p enigma-core --no-deps --open` — API docs.
+- **The solver finds nothing** — it needs enough text (about a paragraph for
+  blind mode) and, for crib mode, a correct guess. Check the language setting
+  (`de` for German messages, `en` for English).
+- **Red error in the machine tab** — the settings contradict each other
+  (e.g. the same rotor twice). Read the message, fix the field, load again.
+- **The app window won't open** — the 3D interface needs working graphics
+  drivers; updating them fixes it in nearly all cases.
 
-Known limits: rings are always assumed known (no ring search); blind mode
-wants 150+ characters and a fixed order or small pool; M4-scale blind pools
-are computationally out of reach without a crib — historically honest, the
-Bombe needed cribs too.
+## For the technically curious
 
-## Data + license
-
-Quadgram tables in `enigma-solver/data/` mirror
-[torognes/enigma](https://github.com/torognes/enigma), originally from James
-Lyons' [Practical Cryptography](https://practicalcryptography.com/cryptanalysis/letter-frequencies-various-languages/).
-See `enigma-solver/data/README.md`.
+Detailed documentation lives in [`docs/`](docs/README.md): the
+[GUI guide](docs/gui.md), the [command-line reference](docs/cli.md), how the
+[solvers](docs/solvers.md) work, [manual testing](docs/manual-testing.md),
+and [development](docs/development.md).
 
 Licensed under MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`).
