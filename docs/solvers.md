@@ -40,6 +40,11 @@ release. Debug builds are ~10× slower — always benchmark and demo with
 - Rings are always assumed known — no ring search exists yet.
 - Blind mode wants ~150+ characters and a fixed order or small pool; M4-scale
   blind pools are out of reach without a crib (as in 1942).
+- Short texts overfit: with few letters and `--max-plugs 10`, the climber
+  invents bogus plugs that outscore the truth (positions usually still come
+  out right). Cap `--max-plugs` near the true count — or `0` when unplugged.
+- The default language is German (`de`): an English message solved with the
+  German table typically fails. Match `--lang` to the message.
 - Shortlisted crib candidates below full matches only make sense with
   `--min-matches` lowered deliberately.
 

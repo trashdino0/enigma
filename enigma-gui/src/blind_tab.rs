@@ -275,6 +275,12 @@ impl BlindTab {
             if ui.button("Start search").clicked() {
                 self.start();
             }
+            let cipher_len = enigma_solver::crib::encode_text(&self.cipher).len();
+            if cipher_len < 100 {
+                ui.weak(format!(
+                    "{cipher_len} letters: short texts overfit — try max plugs 0 first, and check the language"
+                ));
+            }
             if ui.button("Load config…").clicked() {
                 if let Some(path) = crate::dialogs::pick_toml() {
                     match enigma_config::AppConfig::load(&path) {

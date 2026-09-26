@@ -474,6 +474,13 @@ fn run_solve_crib(args: &SolveCribArgs, ctx: &FileCtx) -> Result<(), CliError> {
 fn run_solve_blind(args: &SolveBlindArgs, ctx: &FileCtx) -> Result<(), CliError> {
     let cipher_raw = read_text(args.cipher.as_ref(), args.input.as_ref())?;
     let cipher = encode_text(&cipher_raw);
+    if cipher.len() < 100 {
+        eprintln!(
+            "note: ciphertext is short ({} letters); plug search overfits easily — \
+             try --max-plugs 0 first, and check --lang matches the message",
+            cipher.len()
+        );
+    }
     let lang = ctx.solver_lang(args.lang.lang.as_deref())?;
     let file_machine = match &ctx.file {
         Some(file) => Some(

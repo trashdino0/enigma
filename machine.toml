@@ -1,0 +1,15 @@
+[machine]
+rotors = [
+    "I",
+    "II",
+    "III",
+]
+rings = "AAA"
+positions = "AAA"
+reflector = "B"
+plugs = ""
+etw = "identity"
+
+[profiles]
+
+[solver]
