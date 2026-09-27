@@ -146,6 +146,7 @@ function cribRow(c, i) {
 async function cribRefresh() {
   try {
     cribWinners = await invoke("crib_live");
+    $("c-empty").hidden = cribWinners.length > 0;
     const tb = $("c-table").querySelector("tbody");
     tb.innerHTML = cribWinners.map(cribRow).join("");
     tb.querySelectorAll("tr").forEach((tr) => {
@@ -186,6 +187,7 @@ $("c-start").addEventListener("click", async () => {
   try {
     await invoke("crib_start", { params });
     $("c-status").textContent = "Hunting…";
+    $("c-empty").hidden = true;
     cribWinners = []; cribPreviewFull = ""; $("c-preview").textContent = "";
     clearInterval(cribPoll);
     cribPoll = setInterval(cribRefresh, 600);
@@ -276,6 +278,7 @@ $("b-start").addEventListener("click", async () => {
   try {
     await invoke("blind_start", { params });
     blindWinners = []; blindPreviewFull = "";
+    $("b-empty").hidden = true;
     $("b-table").querySelector("tbody").innerHTML = "";
     $("b-preview").textContent = "";
   } catch (e) { showError("b-error", String(e)); }
@@ -315,6 +318,7 @@ await listen("blind-progress", (e) => {
 });
 await listen("blind-done", (e) => {
   blindWinners = e.payload;
+  $("b-empty").hidden = blindWinners.length > 0;
   const tb = $("b-table").querySelector("tbody");
   tb.innerHTML = blindWinners.map(blindRow).join("");
   tb.querySelectorAll("tr").forEach((tr) => {

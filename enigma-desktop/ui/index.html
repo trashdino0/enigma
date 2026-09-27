@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="EnigmaSaurus: encrypt with and break the Enigma M3/M4 cipher machine." />
 <title>EnigmaSaurus: M3/M4 Workbench</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
@@ -114,6 +116,7 @@
         <div id="c-status" class="dim">Fill the form and press Start hunt.</div>
         <h2>Results <span class="dim">(click a row to preview)</span></h2>
         <table id="c-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Matches</th><th>Score</th></tr></thead><tbody></tbody></table>
+        <div id="c-empty" class="empty"><strong>The tar pit is empty.</strong>Fill the form and press Start hunt, or Fill demo for a guaranteed catch.</div>
         <pre id="c-preview" class="output"></pre>
         <div class="btnrow"><button id="c-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
       </div>
@@ -161,6 +164,7 @@
         </div>
         <h2>Winners <span class="dim">(click a row to preview)</span></h2>
         <table id="b-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Plugs</th><th>Score</th></tr></thead><tbody></tbody></table>
+        <div id="b-empty" class="empty"><strong>No tracks yet.</strong>Fill the form and press Start hunt, or Fill demo for a guaranteed catch.</div>
         <pre id="b-preview" class="output"></pre>
         <div class="btnrow"><button id="b-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
       </div>
