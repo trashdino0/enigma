@@ -140,7 +140,7 @@ $("m-savecfg").addEventListener("click", async () => {
 /* ---------- crib tab ---------- */
 let cribPoll = null, cribWinners = [], cribPreviewFull = "", cribCribLen = 0;
 function cribRow(c, i) {
-  return `<tr data-i="${i}"><td>#${i + 1}</td><td>${c.order.join(" ")}</td>` +
+  return `<tr class="new-row" data-i="${i}"><td>#${i + 1}</td><td>${c.order.join(" ")}</td>` +
     `<td>${c.positions.map(letter).join("")}</td><td>${c.matches}</td><td>${c.score.toFixed(1)}</td></tr>`;
 }
 async function cribRefresh() {
@@ -238,7 +238,7 @@ let blindWinners = [], blindPreviewFull = "";
 function blindRow(c, i) {
   const plugs = c.plugs.length
     ? c.plugs.map(([a, b]) => letter(a) + letter(b)).join(" ") : "None";
-  return `<tr data-i="${i}"><td>#${i + 1}</td><td>${c.order.join(" ")}</td>` +
+  return `<tr class="new-row" data-i="${i}"><td>#${i + 1}</td><td>${c.order.join(" ")}</td>` +
     `<td>${c.positions.map(letter).join("")}</td><td>${plugs}</td><td>${c.score.toFixed(1)}</td></tr>`;
 }
 $("b-demo").addEventListener("click", async () => {
