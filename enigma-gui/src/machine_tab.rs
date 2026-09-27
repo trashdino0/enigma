@@ -192,7 +192,7 @@ impl MachineTab {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         egui::Panel::left("machine_config").show(ui, |ui| {
-            ui.heading("Configuration");
+            ui.heading("Step 1 — Set up the beast");
             for (i, label) in [
                 "Rotor 1 (left)",
                 "Rotor 2",
@@ -213,6 +213,12 @@ impl MachineTab {
                         for c in choices {
                             ui.selectable_value(&mut self.slots[i], c.to_string(), *c);
                         }
+                    })
+                    .response
+                    .on_hover_text(if i < 3 {
+                        "Scrambling wheels, left to right. The fast one on the right steps with every letter."
+                    } else {
+                        "Naval 4th wheel (Beta/Gamma) — or — for army machines. It never steps."
                     });
             }
             egui::ComboBox::from_label("Reflector")
@@ -221,28 +227,48 @@ impl MachineTab {
                     for r in REFLECTORS {
                         ui.selectable_value(&mut self.reflector, r.to_string(), r);
                     }
-                });
+                })
+                .response
+                .on_hover_text("Turns the signal around halfway. B is the classic.");
             egui::ComboBox::from_label("Entry wheel")
                 .selected_text(&self.etw)
                 .show_ui(ui, |ui| {
                     for e in ETWS {
                         ui.selectable_value(&mut self.etw, e.to_string(), e);
                     }
-                });
+                })
+                .response
+                .on_hover_text("Fixed wiring. identity for army/navy machines.");
             ui.horizontal(|ui| {
-                ui.label("Rings");
+                ui.label("Rings").on_hover_text(
+                    "Fine adjustment, set once — one letter per wheel.",
+                );
                 ui.text_edit_singleline(&mut self.rings);
             });
             ui.horizontal(|ui| {
-                ui.label("Positions");
+                ui.label("Positions").on_hover_text(
+                    "Letters in the little windows where typing starts.",
+                );
                 ui.text_edit_singleline(&mut self.positions);
+                if ui
+                    .button("🎲")
+                    .on_hover_text("Surprise me: random start positions")
+                    .clicked()
+                {
+                    let n = if self.slots[3] == "—" { 3 } else { 4 };
+                    self.positions = random_letters(n);
+                }
             });
             ui.horizontal(|ui| {
                 ui.label("Plugs");
                 ui.text_edit_singleline(&mut self.plugs)
-                    .on_hover_text("Pairs like AV BS CG — empty means unpatched");
+                    .on_hover_text("Front-panel cables swapping letter pairs, like AV BS CG — empty means unpatched");
             });
-            if ui.button("Load machine").clicked() {
+            if ui
+                .button("Load machine")
+                .on_hover_text("Build the machine from these settings")
+                .clicked()
+            {
                 self.load();
             }
             ui.horizontal(|ui| {
@@ -279,7 +305,10 @@ impl MachineTab {
         egui::CentralPanel::default().show(ui, |ui| {
             ui.label(&self.summary);
             if self.machine.is_none() {
-                ui.weak("Load a machine to start typing.");
+                ui.separator();
+                ui.heading("Welcome to the nest 🦕");
+                ui.label("Pick your wheels on the left, press Load machine, then type below.");
+                ui.weak("Try it: defaults are already valid — just press Load machine and type AAAAA.");
                 return;
             }
             // Rotor windows.
@@ -293,10 +322,11 @@ impl MachineTab {
                     ui.label(egui::RichText::new(w.to_string()).size(40.0).strong());
                 }
             });
+            ui.heading("Step 2 — Type");
             let changed = ui
                 .add(
                     egui::TextEdit::multiline(&mut self.input)
-                        .hint_text("Type plaintext here…")
+                        .hint_text("Type here — secrets come out below…")
                         .desired_rows(6)
                         .desired_width(f32::INFINITY),
                 )
@@ -308,11 +338,17 @@ impl MachineTab {
             egui::ScrollArea::vertical()
                 .max_height(160.0)
                 .show(ui, |ui| {
-                    ui.label(rebuild_output(&self.input, &self.cipher_letters));
+                    if self.cipher_letters.is_empty() {
+                        ui.weak("Encrypted text appears here as you type.");
+                    } else {
+                        ui.label(rebuild_output(&self.input, &self.cipher_letters));
+                    }
                 });
             if let Some(t) = &self.last_trace {
                 ui.label(egui::RichText::new("Signal path").strong());
-                ui.monospace(crate::trace_line(t));
+                ui.monospace(crate::trace_line(t)).on_hover_text(
+                    "Every stop the last letter made: plugboard → entry wheel → rotors → reflector → back out.",
+                );
             }
             ui.horizontal(|ui| {
                 if ui.button("Clear").clicked() {
@@ -321,6 +357,9 @@ impl MachineTab {
                         let start = self.start_positions.clone();
                         let _ = m.set_positions(&start);
                     }
+                }
+                if ui.button("Copy").clicked() {
+                    ui.ctx().copy_text(self.output_text());
                 }
                 if ui.button("Save output…").clicked() {
                     if let Some(path) = crate::dialogs::save_txt("message.txt") {
@@ -332,6 +371,24 @@ impl MachineTab {
             });
         });
     }
+}
+
+/// Dice-cup randomness from the system clock (no rng crate needed).
+fn random_letters(n: usize) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as u64 ^ d.as_secs())
+        .unwrap_or(0x0D1A_D0E5);
+    let mut x = seed | 1;
+    (0..n)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (b'A' + (x % 26) as u8) as char
+        })
+        .collect()
 }
 
 /// Rebuild display text: cipher letters fill letter slots, the rest passes

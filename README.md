@@ -43,14 +43,15 @@ exports the message as a `.txt` file.
 here. Load the exact same settings on any machine and type in the gibberish:
 your message comes back out.
 
-**4. Break a message.** Open the **Crib solver** tab. A "crib" is a guess at
-part of the message — operators often guessed words like weather reports.
-Copy the text from `examples/crib_cipher.txt` into the ciphertext box, type
-`MORGENGRAUEN` as the crib, press **Start search**, and watch it recover the
-full settings (`I II III`, positions `KDO`) in under a second.
+**4. Break a message.** Open the **Crib hunt** tab and press **Fill demo 🦕**
+(a German message plus the guessed word `MORGENGRAUEN` appears), then **Start
+search**: it recovers the full settings (`I II III`, positions `KDO`) in
+under a second. A "crib" is just a guess at part of the message — operators
+often guessed words like weather reports. You can also paste
+`examples/crib_cipher.txt` yourself.
 
-**5. Break one with no clues.** Open the **Blind solver** tab, paste
-`examples/blind_cipher.txt`, set language to English, press **Start search**.
+**5. Break one with no clues.** Open the **Blind hunt** tab, press
+**Fill demo 🦕**, press **Start search**.
 With zero knowledge of the settings it finds the rotors, positions *and* the
 plugboard (`AV BS CG`) and prints the whole decrypted message.
 

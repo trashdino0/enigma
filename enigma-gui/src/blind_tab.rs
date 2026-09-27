@@ -15,6 +15,9 @@ const ETWS: [&str; 2] = ["identity", "qwertz"];
 const LANGS: [&str; 2] = ["de", "en"];
 const FOURTHS: [&str; 3] = ["", "Beta", "Gamma"];
 
+/// Built-in demo: English blind hunt (no plugs) that always succeeds.
+const DEMO_CIPHER: &str = include_str!("../../examples/blind_cipher.txt");
+
 enum BlindMsg {
     Progress(BlindProgress),
     Done(Vec<BlindCandidate>),
@@ -80,6 +83,10 @@ impl BlindTab {
 
     fn start(&mut self) {
         self.error = None;
+        if enigma_solver::crib::encode_text(&self.cipher).is_empty() {
+            self.error = Some("Paste a ciphertext first — or press “Fill demo”.".into());
+            return;
+        }
         let pool: Vec<String> = self.pool.split_whitespace().map(str::to_string).collect();
         let lang = match Lang::parse(&self.lang) {
             Ok(l) => l,
@@ -211,7 +218,20 @@ impl BlindTab {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         self.poll(ui);
         egui::Panel::left("blind_form").show(ui, |ui| {
-            ui.heading("Blind search");
+            ui.heading("Step 1 — Describe the tracks");
+            if ui
+                .button("Fill demo 🦕")
+                .on_hover_text("Loads an English message + settings that always crack")
+                .clicked()
+            {
+                self.cipher = DEMO_CIPHER.trim().into();
+                self.pool = "I II III".into();
+                self.lang = "en".into();
+                self.max_plugs = "6".into();
+                self.top_positions = "8".into();
+                self.restarts = "3".into();
+                self.error = None;
+            }
             ui.horizontal(|ui| {
                 ui.label("Rotor pool");
                 ui.text_edit_singleline(&mut self.pool)
@@ -277,9 +297,12 @@ impl BlindTab {
             }
             let cipher_len = enigma_solver::crib::encode_text(&self.cipher).len();
             if cipher_len < 100 {
-                ui.weak(format!(
-                    "{cipher_len} letters: short texts overfit — try max plugs 0 first, and check the language"
-                ));
+                ui.colored_label(
+                    crate::AMBER,
+                    format!(
+                        "Only {cipher_len} letters — short tracks overfit. Try max plugs 0 first, and check the language."
+                    ),
+                );
             }
             if ui.button("Load config…").clicked() {
                 if let Some(path) = crate::dialogs::pick_toml() {

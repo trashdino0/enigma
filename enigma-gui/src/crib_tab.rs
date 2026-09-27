@@ -16,6 +16,10 @@ const ETWS: [&str; 2] = ["identity", "qwertz"];
 const LANGS: [&str; 2] = ["de", "en"];
 const FOURTHS: [&str; 3] = ["", "Beta", "Gamma"];
 
+/// Built-in demo: German crib hunt that always succeeds.
+const DEMO_CIPHER: &str = include_str!("../../examples/crib_cipher.txt");
+const DEMO_CRIB: &str = "MORGENGRAUEN";
+
 enum CribMsg {
     Tick(usize, usize),
     Done,
@@ -77,6 +81,14 @@ impl Default for CribTab {
 impl CribTab {
     fn start(&mut self) {
         self.error = None;
+        if enigma_solver::crib::encode_text(&self.cipher).is_empty() {
+            self.error = Some("Paste a ciphertext first — or press “Fill demo”.".into());
+            return;
+        }
+        if enigma_solver::crib::encode_text(&self.crib).is_empty() {
+            self.error = Some("Type the guessed word (crib) first.".into());
+            return;
+        }
         let pool: Vec<String> = self.pool.split_whitespace().map(str::to_string).collect();
         let fourth = if self.fourth.trim().is_empty() {
             None
@@ -256,11 +268,22 @@ impl CribTab {
     pub fn show(&mut self, ui: &mut egui::Ui) {
         self.poll(ui);
         egui::Panel::left("crib_form").show(ui, |ui| {
-            ui.heading("Crib search");
+            ui.heading("Step 1 — Describe the prey");
+            if ui
+                .button("Fill demo 🦕")
+                .on_hover_text("Loads a German message + crib that always cracks")
+                .clicked()
+            {
+                self.cipher = DEMO_CIPHER.trim().into();
+                self.crib = DEMO_CRIB.into();
+                self.pool = "I II III".into();
+                self.lang = "de".into();
+                self.error = None;
+            }
             ui.horizontal(|ui| {
                 ui.label("Rotor pool");
                 ui.text_edit_singleline(&mut self.pool)
-                    .on_hover_text("Permuted, taken 3 per order");
+                    .on_hover_text("Wheels to try — every order gets tested, taken 3 at a time");
             });
             egui::ComboBox::from_label("M4 fourth")
                 .selected_text(if self.fourth.is_empty() {
@@ -306,15 +329,18 @@ impl CribTab {
                         ui.selectable_value(&mut self.lang, l.to_string(), l);
                     }
                 });
-            ui.label("Ciphertext");
+            ui.label("Ciphertext")
+                .on_hover_text("The intercepted message — paste it here");
             ui.add(
                 egui::TextEdit::multiline(&mut self.cipher)
+                    .hint_text("Paste the gibberish here…")
                     .desired_rows(4)
                     .desired_width(f32::INFINITY),
             );
             ui.horizontal(|ui| {
                 ui.label("Crib");
-                ui.text_edit_singleline(&mut self.crib);
+                ui.text_edit_singleline(&mut self.crib)
+                    .on_hover_text("A word you guess is hiding in the message");
             });
             ui.horizontal(|ui| {
                 ui.label("Offset");

@@ -25,13 +25,22 @@ struct GuiApp {
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::Panel::top("tabs").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Machine, "Machine");
-                ui.selectable_value(&mut self.tab, Tab::Crib, "Crib solver");
-                ui.selectable_value(&mut self.tab, Tab::Blind, "Blind solver");
-            });
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("🦕 EnigmaSaurus")
+                    .size(22.0)
+                    .strong()
+                    .color(AMBER),
+            );
+            ui.weak("the Enigma workbench");
         });
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.tab, Tab::Machine, "🔤 Machine");
+            ui.selectable_value(&mut self.tab, Tab::Crib, "🔍 Crib hunt");
+            ui.selectable_value(&mut self.tab, Tab::Blind, "🌿 Blind hunt");
+        });
+        ui.separator();
         match self.tab {
             Tab::Machine => self.machine.show(ui),
             Tab::Crib => self.crib.show(ui),
@@ -40,15 +49,35 @@ impl eframe::App for GuiApp {
     }
 }
 
+/// Jungle night palette: deep greens, fern selection, amber highlights.
+pub(crate) fn dino_visuals() -> egui::Visuals {
+    let mut v = egui::Visuals::dark();
+    v.window_fill = egui::Color32::from_rgb(16, 26, 18);
+    v.panel_fill = egui::Color32::from_rgb(20, 32, 22);
+    v.faint_bg_color = egui::Color32::from_rgb(28, 44, 30);
+    v.extreme_bg_color = egui::Color32::from_rgb(12, 20, 14);
+    v.selection.bg_fill = egui::Color32::from_rgb(62, 110, 66);
+    v.hyperlink_color = AMBER;
+    v.warn_fg_color = AMBER;
+    v.widgets.hovered.bg_fill = egui::Color32::from_rgb(40, 62, 42);
+    v.widgets.active.bg_fill = egui::Color32::from_rgb(62, 110, 66);
+    v
+}
+
+pub(crate) const AMBER: egui::Color32 = egui::Color32::from_rgb(232, 184, 90);
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1000.0, 720.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "Enigma M3/M4",
+        "🦕 EnigmaSaurus — M3/M4 Workbench",
         options,
-        Box::new(|_cc| Ok(Box::new(GuiApp::default()))),
+        Box::new(|cc| {
+            cc.egui_ctx.set_visuals(dino_visuals());
+            Ok(Box::new(GuiApp::default()))
+        }),
     )
 }
 

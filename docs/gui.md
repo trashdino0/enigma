@@ -1,7 +1,8 @@
-# GUI guide (`enigma-gui`)
+# GUI guide (`enigma-gui` / EnigmaSaurus)
 
 Launch with `cargo run --release -p enigma-gui` (or the `enigma-gui.exe`
-from the Releases page). Three tabs across the top.
+from the Releases page). Jungle-themed workbench, three tabs. Hover any
+field for a plain-language explanation.
 
 ## Machine tab
 
@@ -14,7 +15,8 @@ Typing area: input box, output box, big rotor-window letters, and the
 per-stage signal path (`IN → plug → ETW → rotors → reflector → back → out`)
 for the last keypress. Typing one letter enciphers once; deletes, pastes, and
 mid-text edits rewind to the start positions and replay (rotor stepping is
-one-way, like the real machine). **Clear** empties the buffers and rewinds.
+one-way, like the real machine). **Clear** empties the buffers, **Copy**
+copies the output, **🎲** rolls random start positions.
 
 ## Crib solver tab
 
@@ -22,16 +24,20 @@ Form: rotor pool (permuted, taken 3 per order), M4 fourth, rings, reflector,
 assumed-known plugs, entry wheel, language, ciphertext and crib boxes, crib
 offset (empty scans every offset), winner count. **Start search** runs on a
 background thread: progress bar counts finished rotor orders, the results
-table fills live, and clicking a row shows a decrypt preview. See
+table fills live, and clicking a row shows a decrypt preview. **Fill demo
+🦕** loads a German message + crib that always cracks. See
 [solvers](solvers.md) for what the settings mean.
 
 ## Blind solver tab
 
 Form: pool, fourth, rings, reflector, entry wheel, language, ciphertext, plug
 cap (`0` = positions only), top positions per order, restarts, seed, winner
-count. Progress shows scan/climb/order counters; winners list order,
+count. **Fill demo 🦕** loads an English hunt with known-good settings.
+Progress shows scan/climb/order counters; winners list order,
 positions, plugs, score, and a plaintext preview. Ciphertexts shorter than 25
-letters are rejected; ~150+ characters give reliable results.
+letters are rejected; ~150+ characters give reliable results. Short ciphers
+get an amber warning: few letters plus a high plug cap invents plugboards
+that outscore the truth.
 
 Quitting the app ends any running search. Resume long crib searches through
 the CLI `--checkpoint-file` instead.
