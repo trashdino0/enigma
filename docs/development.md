@@ -9,6 +9,7 @@ Requires stable Rust (developed on 1.98).
 | `enigma-cli`   | `enigma` binary: encrypt/decrypt/solve-crib/solve-blind |
 | `enigma-tui`   | `enigma-tui` binary: live typing + signal path, solver progress |
 | `enigma-gui`   | `enigma-gui` binary: desktop workbench (machine + crib + blind tabs) |
+| `enigma-desktop` | Tauri desktop app (`src-tauri` backend + vanilla `ui/` frontend) |
 | `examples/`    | Demo plaintext/cipher pairs                              |
 
 ```sh

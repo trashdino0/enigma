@@ -15,7 +15,8 @@ window with buttons and text boxes.
 
 **Option A — download (easiest, once a release exists):** open the
 [Releases page](https://github.com/trashdino0/enigma/releases), download
-`enigma-gui.exe`, and double-click it. No installation.
+`enigma-desktop.exe`, and double-click it. No installation. (It's the Tauri
+desktop app below; `enigma-gui.exe` is the lighter built-in-GUI alternative.)
 
 **Option B — run from source:** install Rust once from
 [rustup.rs](https://rustup.rs), then in this folder run:
@@ -23,6 +24,17 @@ window with buttons and text boxes.
 ```sh
 cargo run --release -p enigma-gui
 ```
+
+Prefer the full desktop experience (real web-style UI, same engine)?
+
+```sh
+cargo tauri build --no-bundle   # needs: cargo install tauri-cli
+# exe lands in target/release/enigma-desktop.exe
+```
+
+It has the same three areas — Machine, Crib hunt, Blind hunt — with forms,
+progress bars, clickable result tables, decrypt previews, and native file
+dialogs for configs and messages.
 
 ## Take the tour (5 minutes)
 

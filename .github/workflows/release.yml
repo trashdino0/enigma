@@ -14,11 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install tauri-cli --locked
       - run: cargo build --release -p enigma-gui -p enigma-cli -p enigma-tui
+      - run: cargo tauri build --no-bundle
       - run: >
           gh release create "${{ github.ref_name }}"
           --title "${{ github.ref_name }}"
-          --notes "Enigma M3/M4 workbench: desktop GUI plus CLI and TUI."
+          --notes "EnigmaSaurus M3/M4 workbench: Tauri desktop app plus egui GUI, CLI and TUI."
+          target/release/enigma-desktop.exe
           target/release/enigma-gui.exe
           target/release/enigma.exe
           target/release/enigma-tui.exe

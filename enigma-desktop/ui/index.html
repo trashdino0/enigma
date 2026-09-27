@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EnigmaSaurus — M3/M4 Workbench</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <div class="brand"><span class="dino">🦕</span> EnigmaSaurus</div>
+  <div class="tagline">the Enigma workbench</div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="machine">🔤 Machine</button>
+    <button class="tab" data-tab="crib">🔍 Crib hunt</button>
+    <button class="tab" data-tab="blind">🌿 Blind hunt</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ MACHINE ============ -->
+  <section id="tab-machine" class="tabpane active">
+    <div class="cols">
+      <div class="card">
+        <h2>Step 1 — Set up the beast</h2>
+        <label title="Scrambling wheels, left to right. The fast one on the right steps with every letter.">Rotor 1 (left)
+          <select id="m-r1"></select></label>
+        <label title="Scrambling wheels, left to right.">Rotor 2
+          <select id="m-r2"></select></label>
+        <label title="The fast one steps with every letter.">Rotor 3 (fast)
+          <select id="m-r3"></select></label>
+        <label title="Naval 4th wheel — never steps. Leave as — for army machines.">Rotor 4 (M4)
+          <select id="m-r4"></select></label>
+        <label title="Turns the signal around halfway. B is the classic.">Reflector
+          <select id="m-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
+        <label title="Fixed wiring. identity for army/navy machines.">Entry wheel
+          <select id="m-etw"><option>identity</option><option>qwertz</option></select></label>
+        <label title="Fine adjustment, set once — one letter per wheel.">Rings
+          <input id="m-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
+        <label title="Letters in the little windows where typing starts.">Positions
+          <span class="row"><input id="m-pos" value="AAA" maxlength="4" spellcheck="false" />
+          <button id="m-dice" title="Surprise me: random start positions">🎲</button></span></label>
+        <label title="Front-panel cables swapping letter pairs, like AV BS CG.">Plugs
+          <input id="m-plugs" placeholder="AV BS CG" spellcheck="false" /></label>
+        <div class="btnrow">
+          <button id="m-load" class="primary" title="Build the machine from these settings">Load machine</button>
+        </div>
+        <div class="btnrow">
+          <button id="m-loadcfg" title="Read a TOML setup file">Load config…</button>
+          <button id="m-savecfg" title="Write these settings as TOML">Save config…</button>
+        </div>
+        <div id="m-error" class="error" hidden></div>
+      </div>
+      <div class="card grow">
+        <div id="m-summary" class="summary">Press “Load machine”.</div>
+        <div id="m-welcome">
+          <h2>Welcome to the nest 🦕</h2>
+          <p>Pick your wheels on the left, press <b>Load machine</b>, then type below.
+          Try the defaults first: load and type <code>AAAAA</code> — history says <code>BDZGO</code>.</p>
+        </div>
+        <div id="m-live" hidden>
+          <div id="m-windows" class="windows" title="Current window letters"></div>
+          <h2>Step 2 — Type</h2>
+          <textarea id="m-input" rows="6" placeholder="Type here — secrets come out below…"></textarea>
+          <h2>Output</h2>
+          <pre id="m-output" class="output"><span class="dim">Encrypted text appears here as you type.</span></pre>
+          <h2>Signal path</h2>
+          <pre id="m-trace" class="trace"></pre>
+          <div class="btnrow">
+            <button id="m-clear">Clear</button>
+            <button id="m-copy" title="Copy output to clipboard">Copy</button>
+            <button id="m-save" title="Write the output to a .txt file">Save output…</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CRIB ============ -->
+  <section id="tab-crib" class="tabpane">
+    <div class="cols">
+      <div class="card">
+        <h2>Step 1 — Describe the prey</h2>
+        <button id="c-demo" title="Loads a German message + crib that always cracks">Fill demo 🦕</button>
+        <label title="Wheels to try — every order gets tested, taken 3 at a time.">Rotor pool
+          <input id="c-pool" value="I II III" spellcheck="false" /></label>
+        <label title="Naval fixed 4th wheel, or empty.">M4 fourth
+          <select id="c-fourth"><option value="">—</option><option>Beta</option><option>Gamma</option></select></label>
+        <label>Rings <input id="c-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
+        <label>Reflector
+          <select id="c-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
+        <label title="Plug pairs you already know.">Known plugs
+          <input id="c-plugs" placeholder="AV BS CG" spellcheck="false" /></label>
+        <label>Entry wheel
+          <select id="c-etw"><option>identity</option><option>qwertz</option></select></label>
+        <label>Language
+          <select id="c-lang"><option>de</option><option>en</option></select></label>
+        <label title="The intercepted message — paste it here.">Ciphertext
+          <textarea id="c-cipher" rows="4"></textarea></label>
+        <label title="A word you guess is hiding in the message.">Crib
+          <input id="c-crib" spellcheck="false" /></label>
+        <label title="Empty scans every offset.">Crib offset
+          <input id="c-offset" placeholder="scan all" spellcheck="false" /></label>
+        <label>Winners <input id="c-top" value="5" spellcheck="false" /></label>
+        <div class="btnrow">
+          <button id="c-start" class="primary">Start hunt</button>
+          <button id="c-loadcfg" title="Fill machine fields from a TOML file">Load config…</button>
+        </div>
+        <div id="c-error" class="error" hidden></div>
+      </div>
+      <div class="card grow">
+        <h2>Step 2 — Hunt</h2>
+        <progress id="c-bar" max="100" value="0"></progress>
+        <div id="c-status" class="dim">Fill the form and press Start hunt.</div>
+        <h2>Step 3 — Results <span class="dim">(click a row to preview)</span></h2>
+        <table id="c-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Matches</th><th>Score</th></tr></thead><tbody></tbody></table>
+        <pre id="c-preview" class="output"></pre>
+        <div class="btnrow"><button id="c-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BLIND ============ -->
+  <section id="tab-blind" class="tabpane">
+    <div class="cols">
+      <div class="card">
+        <h2>Step 1 — Describe the tracks</h2>
+        <button id="b-demo" title="Loads an English hunt with known-good settings">Fill demo 🦕</button>
+        <label title="Wheels to try — every order gets tested, taken 3 at a time.">Rotor pool
+          <input id="b-pool" value="I II III" spellcheck="false" /></label>
+        <label>M4 fourth
+          <select id="b-fourth"><option value="">—</option><option>Beta</option><option>Gamma</option></select></label>
+        <label>Rings <input id="b-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
+        <label>Reflector
+          <select id="b-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
+        <label>Entry wheel
+          <select id="b-etw"><option>identity</option><option>qwertz</option></select></label>
+        <label>Language
+          <select id="b-lang"><option>de</option><option>en</option></select></label>
+        <label title="Longer is better — 150+ letters for reliable results.">Ciphertext
+          <textarea id="b-cipher" rows="4"></textarea></label>
+        <label title="Cap on plug cables the hunter may invent. Lower is safer on short texts.">Max plugs
+          <input id="b-maxplugs" value="6" spellcheck="false" /></label>
+        <label>Top positions <input id="b-toppos" value="10" spellcheck="false" /></label>
+        <label>Restarts <input id="b-restarts" value="3" spellcheck="false" /></label>
+        <label>Seed <input id="b-seed" value="1" spellcheck="false" /></label>
+        <label>Winners <input id="b-top" value="3" spellcheck="false" /></label>
+        <div class="btnrow">
+          <button id="b-start" class="primary">Start hunt</button>
+          <button id="b-loadcfg" title="Fill machine fields from a TOML file">Load config…</button>
+        </div>
+        <div id="b-error" class="error" hidden></div>
+      </div>
+      <div class="card grow">
+        <h2>Step 2 — Hunt</h2>
+        <div id="b-warn" class="warn" hidden></div>
+        <div class="stages">
+          <div>scan <progress id="b-scan" max="100" value="0"></progress> <span id="b-scant"></span></div>
+          <div>climb <progress id="b-climb" max="100" value="0"></progress> <span id="b-climbt"></span></div>
+          <div>orders <progress id="b-ord" max="100" value="0"></progress> <span id="b-ordt"></span></div>
+        </div>
+        <h2>Step 3 — Winners <span class="dim">(click a row to preview)</span></h2>
+        <table id="b-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Plugs</th><th>Score</th></tr></thead><tbody></tbody></table>
+        <pre id="b-preview" class="output"></pre>
+        <div class="btnrow"><button id="b-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
