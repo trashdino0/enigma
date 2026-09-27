@@ -9,6 +9,7 @@
     "beforeBuildCommand": ""
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "EnigmaSaurus: M3/M4 Workbench",
