@@ -9,6 +9,7 @@
   --red: #e0685a;
   --line: #2c442e;
 }
+/* Shape system: surfaces 14px, all controls 8px. No exceptions. */
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -23,7 +24,7 @@ body {
 .tabs { display: flex; gap: 8px; padding-bottom: 12px; }
 .tab {
   background: var(--jungle-2); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 10px;
+  border: 1px solid var(--line); border-radius: 8px;
   padding: 8px 16px; font-size: 15px; cursor: pointer;
 }
 .tab.active { background: var(--moss); border-color: var(--fern); font-weight: 700; }
@@ -53,7 +54,7 @@ textarea { resize: vertical; font-family: Consolas, monospace; }
 .row input { flex: 1; }
 button {
   background: var(--moss); color: var(--ink);
-  border: 1px solid var(--fern); border-radius: 9px;
+  border: 1px solid var(--fern); border-radius: 8px;
   padding: 7px 14px; font-size: 14px; cursor: pointer;
 }
 button:hover { background: #2b4a2e; }
@@ -86,4 +87,4 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: #223823; }
 tbody tr.sel { background: #2c4a2f; }
-code { background: #0d150e; padding: 1px 6px; border-radius: 6px; }
+code { background: #0d150e; padding: 1px 6px; border-radius: 8px; }

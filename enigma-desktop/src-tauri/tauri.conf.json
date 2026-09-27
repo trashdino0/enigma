@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "EnigmaSaurus — M3/M4 Workbench",
+        "title": "EnigmaSaurus: M3/M4 Workbench",
         "width": 1100,
         "height": 780,
         "minWidth": 900,

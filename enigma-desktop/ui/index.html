@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>EnigmaSaurus — M3/M4 Workbench</title>
+<title>EnigmaSaurus: M3/M4 Workbench</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -22,20 +22,20 @@
   <section id="tab-machine" class="tabpane active">
     <div class="cols">
       <div class="card">
-        <h2>Step 1 — Set up the beast</h2>
+        <h2>Set up the beast</h2>
         <label title="Scrambling wheels, left to right. The fast one on the right steps with every letter.">Rotor 1 (left)
           <select id="m-r1"></select></label>
         <label title="Scrambling wheels, left to right.">Rotor 2
           <select id="m-r2"></select></label>
         <label title="The fast one steps with every letter.">Rotor 3 (fast)
           <select id="m-r3"></select></label>
-        <label title="Naval 4th wheel — never steps. Leave as — for army machines.">Rotor 4 (M4)
+        <label title="Naval 4th wheel. It never steps. Leave it on None for army machines.">Rotor 4 (M4)
           <select id="m-r4"></select></label>
         <label title="Turns the signal around halfway. B is the classic.">Reflector
           <select id="m-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
         <label title="Fixed wiring. identity for army/navy machines.">Entry wheel
           <select id="m-etw"><option>identity</option><option>qwertz</option></select></label>
-        <label title="Fine adjustment, set once — one letter per wheel.">Rings
+        <label title="Fine adjustment, set once. One letter per wheel.">Rings
           <input id="m-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
         <label title="Letters in the little windows where typing starts.">Positions
           <span class="row"><input id="m-pos" value="AAA" maxlength="4" spellcheck="false" />
@@ -56,12 +56,12 @@
         <div id="m-welcome">
           <h2>Welcome to the nest 🦕</h2>
           <p>Pick your wheels on the left, press <b>Load machine</b>, then type below.
-          Try the defaults first: load and type <code>AAAAA</code> — history says <code>BDZGO</code>.</p>
+          Try the defaults first: load and type <code>AAAAA</code>. History says <code>BDZGO</code>.</p>
         </div>
         <div id="m-live" hidden>
           <div id="m-windows" class="windows" title="Current window letters"></div>
-          <h2>Step 2 — Type</h2>
-          <textarea id="m-input" rows="6" placeholder="Type here — secrets come out below…"></textarea>
+          <h2>Type</h2>
+          <textarea id="m-input" rows="6" placeholder="Type here. Secrets come out below…"></textarea>
           <h2>Output</h2>
           <pre id="m-output" class="output"><span class="dim">Encrypted text appears here as you type.</span></pre>
           <h2>Signal path</h2>
@@ -80,12 +80,12 @@
   <section id="tab-crib" class="tabpane">
     <div class="cols">
       <div class="card">
-        <h2>Step 1 — Describe the prey</h2>
+        <h2>Describe the prey</h2>
         <button id="c-demo" title="Loads a German message + crib that always cracks">Fill demo 🦕</button>
-        <label title="Wheels to try — every order gets tested, taken 3 at a time.">Rotor pool
+        <label title="Wheels to try. Every order gets tested, taken 3 at a time.">Rotor pool
           <input id="c-pool" value="I II III" spellcheck="false" /></label>
         <label title="Naval fixed 4th wheel, or empty.">M4 fourth
-          <select id="c-fourth"><option value="">—</option><option>Beta</option><option>Gamma</option></select></label>
+          <select id="c-fourth"><option value="">None</option><option>Beta</option><option>Gamma</option></select></label>
         <label>Rings <input id="c-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
         <label>Reflector
           <select id="c-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
@@ -95,7 +95,7 @@
           <select id="c-etw"><option>identity</option><option>qwertz</option></select></label>
         <label>Language
           <select id="c-lang"><option>de</option><option>en</option></select></label>
-        <label title="The intercepted message — paste it here.">Ciphertext
+        <label title="The intercepted message. Paste it here.">Ciphertext
           <textarea id="c-cipher" rows="4"></textarea></label>
         <label title="A word you guess is hiding in the message.">Crib
           <input id="c-crib" spellcheck="false" /></label>
@@ -109,10 +109,10 @@
         <div id="c-error" class="error" hidden></div>
       </div>
       <div class="card grow">
-        <h2>Step 2 — Hunt</h2>
+        <h2>Hunt</h2>
         <progress id="c-bar" max="100" value="0"></progress>
         <div id="c-status" class="dim">Fill the form and press Start hunt.</div>
-        <h2>Step 3 — Results <span class="dim">(click a row to preview)</span></h2>
+        <h2>Results <span class="dim">(click a row to preview)</span></h2>
         <table id="c-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Matches</th><th>Score</th></tr></thead><tbody></tbody></table>
         <pre id="c-preview" class="output"></pre>
         <div class="btnrow"><button id="c-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
@@ -124,12 +124,12 @@
   <section id="tab-blind" class="tabpane">
     <div class="cols">
       <div class="card">
-        <h2>Step 1 — Describe the tracks</h2>
+        <h2>Describe the tracks</h2>
         <button id="b-demo" title="Loads an English hunt with known-good settings">Fill demo 🦕</button>
-        <label title="Wheels to try — every order gets tested, taken 3 at a time.">Rotor pool
+        <label title="Wheels to try. Every order gets tested, taken 3 at a time.">Rotor pool
           <input id="b-pool" value="I II III" spellcheck="false" /></label>
         <label>M4 fourth
-          <select id="b-fourth"><option value="">—</option><option>Beta</option><option>Gamma</option></select></label>
+          <select id="b-fourth"><option value="">None</option><option>Beta</option><option>Gamma</option></select></label>
         <label>Rings <input id="b-rings" value="AAA" maxlength="4" spellcheck="false" /></label>
         <label>Reflector
           <select id="b-ref"><option>B</option><option>C</option><option>Thin-B</option><option>Thin-C</option></select></label>
@@ -137,7 +137,7 @@
           <select id="b-etw"><option>identity</option><option>qwertz</option></select></label>
         <label>Language
           <select id="b-lang"><option>de</option><option>en</option></select></label>
-        <label title="Longer is better — 150+ letters for reliable results.">Ciphertext
+        <label title="Longer is better: 150+ letters for reliable results.">Ciphertext
           <textarea id="b-cipher" rows="4"></textarea></label>
         <label title="Cap on plug cables the hunter may invent. Lower is safer on short texts.">Max plugs
           <input id="b-maxplugs" value="6" spellcheck="false" /></label>
@@ -152,14 +152,14 @@
         <div id="b-error" class="error" hidden></div>
       </div>
       <div class="card grow">
-        <h2>Step 2 — Hunt</h2>
+        <h2>Hunt</h2>
         <div id="b-warn" class="warn" hidden></div>
         <div class="stages">
           <div>scan <progress id="b-scan" max="100" value="0"></progress> <span id="b-scant"></span></div>
           <div>climb <progress id="b-climb" max="100" value="0"></progress> <span id="b-climbt"></span></div>
           <div>orders <progress id="b-ord" max="100" value="0"></progress> <span id="b-ordt"></span></div>
         </div>
-        <h2>Step 3 — Winners <span class="dim">(click a row to preview)</span></h2>
+        <h2>Winners <span class="dim">(click a row to preview)</span></h2>
         <table id="b-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Plugs</th><th>Score</th></tr></thead><tbody></tbody></table>
         <pre id="b-preview" class="output"></pre>
         <div class="btnrow"><button id="b-save" title="Write the selected winner's full plaintext">Save winner…</button></div>

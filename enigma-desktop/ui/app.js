@@ -29,7 +29,7 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 /* ---------- machine tab ---------- */
 const ROTORS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
-const FOURTHS = ["—", "Beta", "Gamma"];
+const FOURTHS = ["None", "Beta", "Gamma"];
 function fillSelect(id, choices, initial) {
   const el = $(id);
   el.innerHTML = "";
@@ -43,12 +43,12 @@ function fillSelect(id, choices, initial) {
 fillSelect("m-r1", ROTORS, "I");
 fillSelect("m-r2", ROTORS, "II");
 fillSelect("m-r3", ROTORS, "III");
-fillSelect("m-r4", FOURTHS, "—");
+fillSelect("m-r4", FOURTHS, "None");
 
 let machineLoaded = false;
 function machineArgs() {
   const rotors = [$("m-r1").value, $("m-r2").value, $("m-r3").value];
-  if ($("m-r4").value !== "—") rotors.push($("m-r4").value);
+  if ($("m-r4").value !== "None") rotors.push($("m-r4").value);
   return {
     rotors,
     rings: $("m-rings").value,
@@ -62,7 +62,7 @@ function applySection(s) {
   const names = s.rotors || [];
   const picks = [$("m-r1"), $("m-r2"), $("m-r3")];
   picks.forEach((el, i) => { if (names[i]) el.value = names[i]; });
-  const fourth = names.length > 3 ? names[3] : "—";
+  const fourth = names.length > 3 ? names[3] : "None";
   if ([...$("m-r4").options].some((o) => o.value === fourth)) $("m-r4").value = fourth;
   if (s.rings) $("m-rings").value = s.rings;
   if (s.positions) $("m-pos").value = s.positions;
@@ -100,7 +100,7 @@ async function retype() {
 }
 $("m-load").addEventListener("click", loadMachine);
 $("m-dice").addEventListener("click", () => {
-  const n = $("m-r4").value === "—" ? 3 : 4;
+  const n = $("m-r4").value === "None" ? 3 : 4;
   $("m-pos").value = Array.from({ length: n }, () =>
     String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
 });
@@ -171,7 +171,7 @@ $("c-demo").addEventListener("click", async () => {
 $("c-start").addEventListener("click", async () => {
   showError("c-error", "");
   if (!$("c-cipher").value.trim() || !$("c-crib").value.trim()) {
-    showError("c-error", "Paste a ciphertext and type the guessed word first — or press “Fill demo”.");
+    showError("c-error", "Paste a ciphertext and type the guessed word first, or press “Fill demo”.");
     return;
   }
   const params = {
@@ -235,7 +235,7 @@ await listen("crib-error", (e) => {
 let blindWinners = [], blindPreviewFull = "";
 function blindRow(c, i) {
   const plugs = c.plugs.length
-    ? c.plugs.map(([a, b]) => letter(a) + letter(b)).join(" ") : "—";
+    ? c.plugs.map(([a, b]) => letter(a) + letter(b)).join(" ") : "None";
   return `<tr data-i="${i}"><td>#${i + 1}</td><td>${c.order.join(" ")}</td>` +
     `<td>${c.positions.map(letter).join("")}</td><td>${plugs}</td><td>${c.score.toFixed(1)}</td></tr>`;
 }
@@ -253,14 +253,14 @@ $("b-demo").addEventListener("click", async () => {
 $("b-start").addEventListener("click", async () => {
   showError("b-error", "");
   if (!$("b-cipher").value.trim()) {
-    showError("b-error", "Paste a ciphertext first — or press “Fill demo”.");
+    showError("b-error", "Paste a ciphertext first, or press “Fill demo”.");
     return;
   }
   const letters = $("b-cipher").value.replace(/[^a-zA-Z]/g, "").length;
   $("b-warn").hidden = letters >= 100;
   if (letters < 100) {
     $("b-warn").textContent =
-      `Only ${letters} letters — short tracks overfit. Try max plugs 0 first, and check the language.`;
+      `Only ${letters} letters: short tracks overfit. Try max plugs 0 first, and check the language.`;
   }
   const params = {
     pool: $("b-pool").value.split(/\s+/).filter(Boolean),

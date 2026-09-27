@@ -136,7 +136,7 @@ pub fn machine_load(args: MachineArgs, state: State<'_, AppState>) -> Result<Str
     .map_err(|e| e.to_string())?;
     let machine = cfg.build_machine().map_err(|e| e.to_string())?;
     let summary = format!(
-        "{} • rings {} • {:?} • {} • {:?}",
+        "{}, rings {}, {:?}, {}, {:?}",
         names.join(" "),
         args.rings.to_ascii_uppercase(),
         cfg.reflector,
