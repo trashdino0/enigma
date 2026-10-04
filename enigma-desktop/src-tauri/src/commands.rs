@@ -258,6 +258,35 @@ fn config_read(path: String) -> Result<SectionDto, String> {
     ))
 }
 
+/// Solver defaults from a config file (`[solver]`; named presets stay CLI-only).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SolverDto {
+    lang: Option<String>,
+    top: Option<usize>,
+    max_plugs: Option<usize>,
+    top_positions: Option<usize>,
+    restarts: Option<usize>,
+    seed: Option<u64>,
+    min_matches: Option<usize>,
+}
+
+#[tauri::command]
+fn solver_read(path: String) -> Result<SolverDto, String> {
+    let solver = AppConfig::load(PathBuf::from(path).as_path())
+        .map_err(|e| e.to_string())?
+        .solver;
+    Ok(SolverDto {
+        lang: solver.lang,
+        top: solver.top,
+        max_plugs: solver.max_plugs,
+        top_positions: solver.top_positions,
+        restarts: solver.restarts,
+        seed: solver.seed,
+        min_matches: solver.min_matches,
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SectionArgs {
@@ -598,6 +627,7 @@ pub fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static
         machine_clear,
         config_read,
         config_write,
+        solver_read,
         text_read,
         text_write,
         demo_text,

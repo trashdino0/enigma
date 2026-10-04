@@ -277,6 +277,9 @@ $("c-loadcfg").addEventListener("click", async () => {
     if (s.reflector) $("c-ref").value = s.reflector;
     if (s.plugs !== undefined && s.plugs !== null) $("c-plugs").value = s.plugs;
     if (s.etw) $("c-etw").value = s.etw;
+    const sv = await invoke("solver_read", { path });
+    if (sv.lang) $("c-lang").value = sv.lang;
+    if (sv.top !== undefined && sv.top !== null) $("c-top").value = String(sv.top);
   } catch (e) { showError("c-error", String(e)); }
 });
 await listen("crib-progress", (e) => {
@@ -373,6 +376,13 @@ $("b-loadcfg").addEventListener("click", async () => {
     if (s.rings) $("b-rings").value = s.rings;
     if (s.reflector) $("b-ref").value = s.reflector;
     if (s.etw) $("b-etw").value = s.etw;
+    const sv = await invoke("solver_read", { path });
+    if (sv.lang) $("b-lang").value = sv.lang;
+    if (sv.maxPlugs !== undefined && sv.maxPlugs !== null) $("b-maxplugs").value = String(sv.maxPlugs);
+    if (sv.topPositions !== undefined && sv.topPositions !== null) $("b-toppos").value = String(sv.topPositions);
+    if (sv.restarts !== undefined && sv.restarts !== null) $("b-restarts").value = String(sv.restarts);
+    if (sv.seed !== undefined && sv.seed !== null) $("b-seed").value = String(sv.seed);
+    if (sv.top !== undefined && sv.top !== null) $("b-top").value = String(sv.top);
   } catch (e) { showError("b-error", String(e)); }
 });
 function setBar(id, tid, done, total) {
