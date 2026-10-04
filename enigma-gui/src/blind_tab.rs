@@ -217,6 +217,28 @@ impl BlindTab {
         }
     }
 
+    /// Fill solver fields from a `[solver]` section (only set values).
+    fn apply_solver_section(&mut self, solver: &enigma_config::SolverSection) {
+        if let Some(v) = &solver.lang {
+            self.lang = v.clone();
+        }
+        if let Some(v) = solver.max_plugs {
+            self.max_plugs = v.to_string();
+        }
+        if let Some(v) = solver.top_positions {
+            self.top_positions = v.to_string();
+        }
+        if let Some(v) = solver.restarts {
+            self.restarts = v.to_string();
+        }
+        if let Some(v) = solver.seed {
+            self.seed = v.to_string();
+        }
+        if let Some(v) = solver.top {
+            self.top = v.to_string();
+        }
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui) {
         self.poll(ui);
         egui::Panel::left("blind_form").show(ui, |ui| {
@@ -309,7 +331,10 @@ impl BlindTab {
             if ui.button("Load config…").clicked() {
                 if let Some(path) = crate::dialogs::pick_toml() {
                     match enigma_config::AppConfig::load(&path) {
-                        Ok(cfg) => self.apply_machine_section(&cfg.machine),
+                        Ok(cfg) => {
+                            self.apply_machine_section(&cfg.machine);
+                            self.apply_solver_section(&cfg.solver);
+                        }
                         Err(e) => self.error = Some(e.to_string()),
                     }
                 }

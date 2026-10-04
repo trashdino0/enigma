@@ -10,6 +10,18 @@
   --line: #2c442e;
   --display: "Bahnschrift SemiBold", Bahnschrift, "Segoe UI", system-ui, sans-serif;
 }
+/* Savanna day: same jungle identity, readable in daylight. */
+[data-theme="light"] {
+  --jungle: #eef3ea;
+  --jungle-2: #ffffff;
+  --moss: #dce8d6;
+  --fern: #2f6b35;
+  --amber: #8a5f16;
+  --ink: #1c2b1e;
+  --dim: #4c6350;
+  --red: #a83a2c;
+  --line: #c3d4c0;
+}
 /* Shape system: surfaces 14px, all controls 8px. No exceptions. */
 * { box-sizing: border-box; }
 body {
@@ -22,6 +34,12 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   min-height: 100vh;
 }
+[data-theme="light"] body {
+  background:
+    radial-gradient(620px 420px at 86% 8%, rgba(64, 150, 84, 0.12), transparent 70%),
+    radial-gradient(720px 520px at 8% 102%, rgba(180, 130, 40, 0.10), transparent 70%),
+    radial-gradient(1200px 600px at 20% -10%, #f7faf3 0%, var(--jungle) 60%);
+}
 /* Film grain: breaks digital flatness. Static, pointer-transparent. */
 body::after {
   content: "";
@@ -29,6 +47,9 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
 }
 .app-header { padding: 14px 22px 0; }
+.header-row { display: flex; align-items: flex-end; gap: 12px; }
+.header-row .tabs { flex: 1; padding-bottom: 12px; }
+#theme-toggle { font-size: 17px; padding: 6px 12px; margin-bottom: 12px; }
 .brand {
   font-family: var(--display);
   font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: var(--amber);
@@ -69,6 +90,8 @@ main { padding: 0 22px 22px; }
 .card h2:first-child { margin-top: 0; }
 .card p { max-width: 65ch; line-height: 1.55; }
 label { display: block; margin: 8px 0; font-size: 13px; color: var(--dim); }
+label.check, label.ob-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+label.check input, label.ob-check input { width: auto; accent-color: var(--fern); }
 input, select, textarea {
   display: block; width: 100%; margin-top: 3px;
   background: #0d150e; color: var(--ink);
@@ -119,6 +142,14 @@ button.primary:hover { background: #4c854f; }
   font-family: var(--display);
   font-size: 44px; font-weight: 800; letter-spacing: 14px;
   color: var(--fern); margin: 4px 0;
+  display: inline-block;
+}
+/* Rotor step pulse: re-triggered from JS on every windows change. */
+.windows.bump { animation: bump 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+@keyframes bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
 }
 .output, .trace {
   background: #0d150e; border: 1px solid var(--line); border-radius: 8px;
@@ -145,11 +176,52 @@ code { background: #0d150e; padding: 1px 6px; border-radius: 8px; }
 }
 .empty strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
 
+/* First-run tour overlay. */
+.onboarding {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(4, 10, 5, 0.72);
+  display: flex; align-items: center; justify-content: center;
+}
+.onboarding[hidden] { display: none; }
+.onboarding-card {
+  background: var(--jungle-2);
+  border: 1px solid var(--fern); border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  padding: 26px 30px; max-width: 460px;
+}
+.onboarding-card h2 { margin-top: 0; color: var(--amber); }
+.onboarding-card p { line-height: 1.6; max-width: 60ch; }
+
+/* Daylight readability fixes on top of the variable swap. */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: #ffffff;
+}
+[data-theme="light"] .output,
+[data-theme="light"] .trace,
+[data-theme="light"] code {
+  background: #ffffff;
+}
+[data-theme="light"] .card {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 0 0 6px rgba(220, 232, 214, 0.7),
+    0 14px 30px rgba(40, 70, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+[data-theme="light"] tbody tr:hover { background: #e4eee1; }
+[data-theme="light"] tbody tr.sel { background: #d2e5cf; }
+[data-theme="light"] button.primary { background: #2f6b35; color: #f4f8f2; }
+[data-theme="light"] .btn-trail { background: rgba(0, 0, 0, 0.12); }
+[data-theme="light"] body::after { opacity: 0.03; }
+[data-theme="light"] .onboarding { background: rgba(60, 70, 58, 0.5); }
+
 @media (prefers-reduced-motion: reduce) {
   button, .tab, tbody tr { transition: none; }
   button:active, .tab:active, tbody tr:active { transform: none; }
   button:hover .btn-trail { transform: none; }
-  .tabpane.active .card, tbody tr.new-row { animation: none; }
+  .tabpane.active .card, tbody tr.new-row, .windows.bump { animation: none; }
 }
 
 /* Pane entry + fresh result rows: heavy fade-up, staggered. */

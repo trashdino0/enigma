@@ -5,6 +5,7 @@ Requires stable Rust (developed on 1.98).
 | Crate          | What it is                                              |
 |----------------|---------------------------------------------------------|
 | `enigma-core`  | Zero-dependency library: rotors, reflector, ETW, plugboard, machine, config |
+| `enigma-config`| TOML configs: machine/profiles/solver presets, custom rotors |
 | `enigma-solver`| Crib + blind solvers, quadgram scoring (`rayon`, `serde`) |
 | `enigma-cli`   | `enigma` binary: encrypt/decrypt/solve-crib/solve-blind |
 | `enigma-tui`   | `enigma-tui` binary: live typing + signal path, solver progress |
@@ -22,8 +23,11 @@ cargo doc -p enigma-core --no-deps --open
 ```
 
 Baselines on the dev machine (release): `encipher_1k` ≈ 42 µs
-(~24M chars/s), `score_1k` ≈ 1.8 µs. Measure before/after every
-optimization; revert neutral or negative results.
+(~24M chars/s), `score_1k` ≈ 1.8 µs, `crib_order_scan` ≈ 55 ms
+(6 orders × 17,576 positions × 62-char cipher). Measure before/after every
+optimization; revert neutral or negative results. Landed so far: pre-parsed
+rotor wirings in blind `SearchParts` (no per-position string parsing);
+per-position machine clones kept after measuring showed decrypt dominates.
 
 Design rules: zero heap in `encipher_char`/scoring (fixed `[u8; 26]`
 lookups); fallible parsing only at construction; historically exact stepping

@@ -80,7 +80,7 @@ fn draw_crib(frame: &mut Frame, s: &CribScreen) {
             .gauge_style(Style::default().fg(Color::Yellow))
             .ratio(ratio)
             .label(format!(
-                "{}/{} orders • {:.0}s",
+                "{}/{} units • {:.0}s",
                 s.done,
                 s.total,
                 s.started.elapsed().as_secs_f32()
@@ -281,10 +281,11 @@ fn draw_blind(frame: &mut Frame, s: &BlindScreen) {
     let mut lines: Vec<Line> = Vec::new();
     for (i, cand) in s.winners.iter().enumerate() {
         lines.push(Line::from(format!(
-            "#{} {} pos {} plugs {} score {:.1}",
+            "#{} {} pos {} rings {} plugs {} score {:.1}",
             i + 1,
             cand.order.join(" "),
             positions_str(&cand.positions),
+            positions_str(&cand.rings),
             plugs_str(&cand.plugs),
             cand.score
         )));
@@ -332,7 +333,12 @@ fn draw_blind(frame: &mut Frame, s: &BlindScreen) {
 }
 
 /// Watch a blind pool search; `Esc`/`Q` returns to the menu.
-pub fn run_blind(cfg: BlindPoolConfig, lang: Lang, subtitle: String) -> io::Result<()> {
+pub fn run_blind(mut cfg: BlindPoolConfig, lang: Lang, subtitle: String) -> io::Result<()> {
+    use enigma_solver::hillclimb::load_blind_checkpoint;
+    let checkpoint: PathBuf =
+        std::env::temp_dir().join(format!("enigma-tui-blind-{}.json", std::process::id()));
+    let _ = std::fs::remove_file(&checkpoint);
+    cfg.checkpoint = Some(checkpoint.clone());
     let (tx, rx) = mpsc::channel::<BlindMsg>();
     std::thread::spawn(move || {
         let scorer = QuadgramScorer::new(lang);
@@ -384,13 +390,21 @@ pub fn run_blind(cfg: BlindPoolConfig, lang: Lang, subtitle: String) -> io::Resu
                     }
                 }
             }
+            // Live winners from the worker's checkpoint file.
+            if !screen.finished {
+                if let Some(ckpt) = load_blind_checkpoint(&checkpoint) {
+                    screen.winners = ckpt.best;
+                }
+            }
             terminal.draw(|f| draw_blind(f, &screen))?;
             if poll_quit()? {
                 break;
             }
         }
         Ok(())
-    })
+    })?;
+    let _ = std::fs::remove_file(&checkpoint);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

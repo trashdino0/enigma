@@ -17,6 +17,53 @@ const showError = (id, msg) => {
   el.hidden = false; el.textContent = msg;
 };
 
+/* ---------- theme: jungle night / savanna day ---------- */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "light" ? "light" : "";
+  $("theme-toggle").textContent = theme === "light" ? "☀️" : "🌙";
+  try { localStorage.setItem("enigmasaurus-theme", theme); } catch {}
+}
+applyTheme((() => { try { return localStorage.getItem("enigmasaurus-theme"); } catch { return null; } })() || "");
+$("theme-toggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "light" ? "" : "light";
+  applyTheme(next);
+});
+
+/* ---------- first-run tour ---------- */
+const TOUR = [
+  ["Welcome to the nest", "This is a real Enigma machine. Open the Machine tab, press Load machine, and type AAAAA. History says the answer is BDZGO."],
+  ["Hunt with a clue", "The Crib hunt tab breaks messages when you can guess a word inside. Press Fill demo, then Start hunt, and watch it recover the full settings."],
+  ["Hunt with nothing", "The Blind hunt tab needs no guesses at all, just a long message. Fill demo again, start it, and it finds rotors, positions, and plugs."],
+];
+(function tour() {
+  let seen = false;
+  try { seen = localStorage.getItem("enigmasaurus-tour") === "done"; } catch {}
+  if (seen) return;
+  let step = 0;
+  const box = $("onboarding");
+  const render = () => {
+    $("ob-title").textContent = `Step ${step + 1} of ${TOUR.length}: ${TOUR[step][0]}`;
+    $("ob-body").textContent = TOUR[step][1];
+    $("ob-next").textContent = step + 1 === TOUR.length ? "Start digging" : "Next";
+  };
+  const finish = (completed) => {
+    try {
+      if ($("ob-hide").checked || completed) {
+        localStorage.setItem("enigmasaurus-tour", "done");
+      }
+    } catch {}
+    box.hidden = true;
+  };
+  $("ob-next").addEventListener("click", () => {
+    if (step + 1 === TOUR.length) { finish(true); return; }
+    step++;
+    render();
+  });
+  $("ob-skip").addEventListener("click", () => finish(false));
+  box.hidden = false;
+  render();
+})();
+
 /* ---------- tabs ---------- */
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -94,7 +141,14 @@ async function retype() {
   try {
     const r = await invoke("machine_type", { full_text: $("m-input").value });
     $("m-output").textContent = r.output;
-    $("m-windows").textContent = [...r.windows].join(" ");
+    const win = $("m-windows");
+    const next = [...r.windows].join(" ");
+    if (win.textContent !== next) {
+      win.textContent = next;
+      win.classList.remove("bump");
+      void win.offsetWidth;
+      win.classList.add("bump");
+    }
     $("m-trace").textContent = r.trace ? formatTrace(r.trace) : "";
   } catch (e) { showError("m-error", String(e)); }
 }
@@ -183,6 +237,8 @@ $("c-start").addEventListener("click", async () => {
     cipher: $("c-cipher").value, crib: $("c-crib").value,
     offset: $("c-offset").value.trim() === "" ? null : Number($("c-offset").value),
     top: Number($("c-top").value) || 5,
+    ringScan: $("c-ringscan").value.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n)),
+    inferPlugs: $("c-infer").checked,
   };
   try {
     await invoke("crib_start", { params });
@@ -197,6 +253,12 @@ $("c-save").addEventListener("click", async () => {
   if (!cribPreviewFull) return;
   const path = await invoke("dialog_save_txt", { name: "crib_result.txt" });
   if (path) await invoke("text_write", { path, contents: cribPreviewFull });
+});
+$("c-copy").addEventListener("click", () => {
+  if (cribPreviewFull) navigator.clipboard.writeText(cribPreviewFull).catch(() => {});
+});
+document.querySelector("#tab-crib").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") $("c-start").click();
 });
 $("c-loadcfg").addEventListener("click", async () => {
   const path = await invoke("dialog_open_toml");
@@ -274,6 +336,7 @@ $("b-start").addEventListener("click", async () => {
     restarts: Number($("b-restarts").value) || 0,
     seed: Number($("b-seed").value) || 1,
     top: Number($("b-top").value) || 3,
+    ringScan: $("b-ringscan").value.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n)),
   };
   try {
     await invoke("blind_start", { params });
@@ -287,6 +350,12 @@ $("b-save").addEventListener("click", async () => {
   if (!blindPreviewFull) return;
   const path = await invoke("dialog_save_txt", { name: "blind_result.txt" });
   if (path) await invoke("text_write", { path, contents: blindPreviewFull });
+});
+$("b-copy").addEventListener("click", () => {
+  if (blindPreviewFull) navigator.clipboard.writeText(blindPreviewFull).catch(() => {});
+});
+document.querySelector("#tab-blind").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") $("b-start").click();
 });
 $("b-loadcfg").addEventListener("click", async () => {
   const path = await invoke("dialog_open_toml");

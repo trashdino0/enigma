@@ -9,13 +9,23 @@ German default).
 ## Crib search (`crib.rs`)
 
 For every rotor order from the pool (M3: taken 3; M4: fixed `--fourth` plus
-taken 3) and every start position (26³ = 17,576 for M3, 26⁴ for M4), decrypt
-and count crib matches at the offset (or every offset). Candidates at or
-above `--min-matches` are shortlisted; quadgram fitness breaks ties. Orders
-run sequentially so `--checkpoint-file` can resume per finished order, while
-positions within an order use all cores.
+taken 3), every ring combination, and every start position (fixed rings,
+reflector, plugs, and entry wheel are assumed known — pass them in),
+decrypt and count crib matches at the offset (or every offset). Candidates
+are ranked by matches, quadgram score breaking ties. Orders × ring combos
+run sequentially so `--checkpoint-file` can resume per finished unit, while
+positions within one unit use all cores.
 
-Assumes rings, reflector, plugs, and entry wheel known. On this hardware the
+- `--ring-scan 0,1` tries ring slots exhaustively (max 676 combos).
+  Ring/position pairs form equivalence classes, so any full-match key
+  decrypts the message — the solver returns the first found, not the
+  historical one.
+- `--infer-plugs` recovers unknown plugs by greedy hill-climbing on crib
+  matches (same neighbourhood as blind mode, crib-anchored, starting from
+  `--plugs`). Honest name: guided recovery, not a Bombe menu — same answers
+  on cooperative texts with far less machinery.
+
+Assumes reflector and entry wheel known. On this hardware the
 `examples/crib_cipher.txt` demo (6 orders) takes ≈ 0.15 s in release.
 
 ## Blind search (`hillclimb.rs`)
@@ -27,13 +37,16 @@ Assumes rings, reflector, plugs, and entry wheel known. On this hardware the
    `rand` dependency). Moves: add/drop a pair, re-terminate one end, swap two
    ends; capped at `--max-plugs`; stops with no improvement (200-iteration
    backstop).
-3. **Merge.** Winners ranked by `(score desc, positions asc, plugs asc)` —
-   deterministic for a fixed `--seed`; identical restarts deduped.
+3. **Merge.** Winners ranked by `(score desc, positions asc, rings asc,
+   plugs asc)` — deterministic for a fixed `--seed`; identical restarts
+   deduped.
 
 `--pool` (+ `--fourth`) repeats this per order with per-order seeds and
-merges globally. The demo (`I II III`, `MKL`, `AV BS CG`) takes ≈ 0.25 s in
-release. Debug builds are ~10× slower — always benchmark and demo with
-`--release`.
+merges globally, resuming per order from `--checkpoint-file`. `--ring-scan`
+multiplies the scan the same way as crib. The demo (`I II III`, `MKL`,
+`AV BS CG`) takes ≈ 0.25 s in release. Wirings parse once per search
+(`SearchParts`); per-candidate assembly stays allocation-light. Debug builds
+are ~10× slower — always benchmark and demo with `--release`.
 
 ## Limits (honest)
 

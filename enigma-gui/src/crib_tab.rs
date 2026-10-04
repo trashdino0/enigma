@@ -226,6 +226,16 @@ impl CribTab {
         }
     }
 
+    /// Fill solver fields from a `[solver]` section (only set values).
+    fn apply_solver_section(&mut self, solver: &enigma_config::SolverSection) {
+        if let Some(v) = &solver.lang {
+            self.lang = v.clone();
+        }
+        if let Some(v) = solver.top {
+            self.top = v.to_string();
+        }
+    }
+
     fn update_preview(&mut self) {
         self.preview.clear();
         let (Some(cfg), Some(cand)) = (self.last_cfg.as_ref(), self.results.get(self.selected))
@@ -361,7 +371,10 @@ impl CribTab {
             if ui.button("Load config…").clicked() {
                 if let Some(path) = crate::dialogs::pick_toml() {
                     match enigma_config::AppConfig::load(&path) {
-                        Ok(cfg) => self.apply_machine_section(&cfg.machine),
+                        Ok(cfg) => {
+                            self.apply_machine_section(&cfg.machine);
+                            self.apply_solver_section(&cfg.solver);
+                        }
                         Err(e) => self.error = Some(e.to_string()),
                     }
                 }

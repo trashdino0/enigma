@@ -12,12 +12,27 @@
 <header class="app-header">
   <div class="brand"><span class="dino">🦕</span> EnigmaSaurus</div>
   <div class="tagline">the Enigma workbench</div>
+  <div class="header-row">
   <nav class="tabs">
     <button class="tab active" data-tab="machine">🔤 Machine</button>
     <button class="tab" data-tab="crib">🔍 Crib hunt</button>
     <button class="tab" data-tab="blind">🌿 Blind hunt</button>
   </nav>
+  <button id="theme-toggle" title="Switch jungle night / savanna day">🌙</button>
+  </div>
 </header>
+
+<div id="onboarding" class="onboarding" hidden>
+  <div class="onboarding-card">
+    <h2 id="ob-title"></h2>
+    <p id="ob-body"></p>
+    <div class="btnrow">
+      <button id="ob-next" class="primary">Next</button>
+      <button id="ob-skip">Skip tour</button>
+    </div>
+    <label class="ob-check"><input type="checkbox" id="ob-hide" /> Do not show again</label>
+  </div>
+</div>
 
 <main>
   <!-- ============ MACHINE ============ -->
@@ -103,6 +118,10 @@
           <input id="c-crib" spellcheck="false" /></label>
         <label title="Empty scans every offset.">Crib offset
           <input id="c-offset" placeholder="scan all" spellcheck="false" /></label>
+        <label title="Ring slots to scan, e.g. 0,1. Empty means fixed rings.">Ring scan
+          <input id="c-ringscan" placeholder="empty = fixed" spellcheck="false" /></label>
+        <label class="check" title="Recover unknown plugboard cables from the crib.">Infer plugs
+          <input type="checkbox" id="c-infer" /></label>
         <label>Winners <input id="c-top" value="5" spellcheck="false" /></label>
         <div class="btnrow">
           <button id="c-start" class="primary">Start hunt <span class="btn-trail" aria-hidden="true">↗</span></button>
@@ -118,7 +137,7 @@
         <table id="c-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Matches</th><th>Score</th></tr></thead><tbody></tbody></table>
         <div id="c-empty" class="empty"><strong>The tar pit is empty.</strong>Fill the form and press Start hunt, or Fill demo for a guaranteed catch.</div>
         <pre id="c-preview" class="output"></pre>
-        <div class="btnrow"><button id="c-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
+        <div class="btnrow"><button id="c-save" title="Write the selected winner's full plaintext">Save winner…</button><button id="c-copy" title="Copy the preview to clipboard">Copy</button></div>
       </div>
     </div>
   </section>
@@ -142,6 +161,8 @@
           <select id="b-lang"><option>de</option><option>en</option></select></label>
         <label title="Longer is better: 150+ letters for reliable results.">Ciphertext
           <textarea id="b-cipher" rows="4"></textarea></label>
+        <label title="Ring slots to scan, e.g. 0,1. Empty means fixed rings.">Ring scan
+          <input id="b-ringscan" placeholder="empty = fixed" spellcheck="false" /></label>
         <label title="Cap on plug cables the hunter may invent. Lower is safer on short texts.">Max plugs
           <input id="b-maxplugs" value="6" spellcheck="false" /></label>
         <label>Top positions <input id="b-toppos" value="10" spellcheck="false" /></label>
@@ -166,7 +187,7 @@
         <table id="b-table"><thead><tr><th>#</th><th>Order</th><th>Pos</th><th>Plugs</th><th>Score</th></tr></thead><tbody></tbody></table>
         <div id="b-empty" class="empty"><strong>No tracks yet.</strong>Fill the form and press Start hunt, or Fill demo for a guaranteed catch.</div>
         <pre id="b-preview" class="output"></pre>
-        <div class="btnrow"><button id="b-save" title="Write the selected winner's full plaintext">Save winner…</button></div>
+        <div class="btnrow"><button id="b-save" title="Write the selected winner's full plaintext">Save winner…</button><button id="b-copy" title="Copy the preview to clipboard">Copy</button></div>
       </div>
     </div>
   </section>

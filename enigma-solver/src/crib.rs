@@ -387,7 +387,7 @@ pub fn solve_crib(
 
         let mut found: Vec<CribCandidate> = if cfg.infer_plugs {
             // Keep the most promising positions, then recover plugs on the crib.
-            scanned.sort_by(|a, b| b.0.cmp(&a.0));
+            scanned.sort_by_key(|a| std::cmp::Reverse(a.0));
             scanned.truncate(cfg.plug_top.max(1));
             scanned
                 .into_par_iter()

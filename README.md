@@ -34,7 +34,8 @@ cargo tauri build --no-bundle   # needs: cargo install tauri-cli
 
 It has the same three areas — Machine, Crib hunt, Blind hunt — with forms,
 progress bars, clickable result tables, decrypt previews, and native file
-dialogs for configs and messages.
+dialogs for configs and messages. First launch shows a 3-step tour, and the
+moon button toggles jungle night / savanna day.
 
 ## Take the tour (5 minutes)
 

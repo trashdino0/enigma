@@ -540,7 +540,6 @@ pub fn solve_blind_pool(
         })
         .collect();
     let order_total = live.len() + checkpoint.done_orders.len();
-    let mut done = checkpoint.done_orders.len();
 
     // Sequential over orders (checkpoint granularity); rayon inside each.
     for (idx, order) in live {
@@ -571,7 +570,7 @@ pub fn solve_blind_pool(
         merged.truncate(cfg.top_n.max(1));
         checkpoint.done_orders.push(order_key(&order));
         checkpoint.best = merged.clone();
-        done += 1;
+        let done = checkpoint.done_orders.len();
         if let Some(path) = &cfg.checkpoint {
             let _ = std::fs::write(path, serde_json::to_string(&checkpoint).unwrap_or_default());
         }
