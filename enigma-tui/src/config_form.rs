@@ -196,6 +196,12 @@ impl ConfigForm {
                     "empty = scan all",
                     String::new(),
                 );
+                add(
+                    "ring_scan",
+                    "Ring scan",
+                    "empty, or slots 0,1",
+                    String::new(),
+                );
                 add("top", "Winners", "how many to show", "5".into());
             }
             FormMode::Blind => {
@@ -239,6 +245,12 @@ impl ConfigForm {
                     "cipher",
                     "Ciphertext",
                     "150+ chars works best",
+                    String::new(),
+                );
+                add(
+                    "ring_scan",
+                    "Ring scan",
+                    "empty, or slots 0,1",
                     String::new(),
                 );
                 add("max_plugs", "Max plugs", "0 = positions only", "6".into());
@@ -314,6 +326,20 @@ impl ConfigForm {
         })
     }
 
+    fn ring_slots(&self) -> Result<Vec<usize>, String> {
+        let raw = self.get("ring_scan").trim();
+        if raw.is_empty() {
+            return Ok(Vec::new());
+        }
+        raw.split(',')
+            .map(|part| {
+                part.trim()
+                    .parse::<usize>()
+                    .map_err(|_| format!("ring scan slot {part:?} is not a number (try \"0,1\")"))
+            })
+            .collect()
+    }
+
     fn pool(&self) -> Result<Vec<String>, EnigmaError> {
         let pool: Vec<String> = self
             .get("rotors")
@@ -371,6 +397,7 @@ impl ConfigForm {
             Some(self.number("crib_offset")?)
         };
         let top = self.number("top")?;
+        let scan_rings = self.ring_slots()?;
         let cfg = build_crib_config(
             &pool,
             fourth.as_deref(),
@@ -383,6 +410,10 @@ impl ConfigForm {
             crib_offset,
             top,
             None,
+            &scan_rings,
+            false,
+            50,
+            10,
         )
         .map_err(|e| e.to_string())?;
         let subtitle = format!(
@@ -427,8 +458,10 @@ impl ConfigForm {
                     self.get("seed")
                 )
             })?,
+            scan_rings: self.ring_slots()?,
             per_order_top: 1,
             top_n: self.number("top")?,
+            checkpoint: None,
         };
         let subtitle = format!(
             "pool {} • {} cipher chars • lang {}",

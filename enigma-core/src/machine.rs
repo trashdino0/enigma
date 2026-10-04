@@ -164,6 +164,12 @@ impl EnigmaMachine {
         (s, t)
     }
 
+    /// Replace the plugboard (solver plug search reuses the rotor stack).
+    /// Validated at construction of `pb`; the hot loop stays branch-free.
+    pub fn set_plugboard(&mut self, plugboard: Plugboard) {
+        self.plugboard = plugboard;
+    }
+
     /// Current window positions, left -> right (solver checkpointing).
     pub fn positions(&self) -> Vec<u8> {
         self.rotors.iter().map(Rotor::position).collect()

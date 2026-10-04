@@ -101,11 +101,15 @@ TEMPERATURESWITHAGENTLEBREEZEFROMTHEWESTINTHEAFTERNOONANDCLEARSKIESOVERNIGHT\
 THEOUTLOOKFORTHEWEEKENDREMAINSPLEASANTWITHLITTLECHANCEOFRAINANDTHEHARVESTEXPE";
 
 fn encrypt_stdout(rotors: &[&str], pos: &str, plugs: &str, text: &str) -> String {
+    encrypt_stdout_ring(rotors, "AAA", pos, plugs, text)
+}
+
+fn encrypt_stdout_ring(rotors: &[&str], rings: &str, pos: &str, plugs: &str, text: &str) -> String {
     let mut args = vec!["encrypt".to_string(), "--rotors".to_string()];
     args.extend(rotors.iter().map(|s| s.to_string()));
     for s in [
         "--rings",
-        "AAA",
+        rings,
         "--pos",
         pos,
         "--reflector",
@@ -291,4 +295,131 @@ fn solve_blind_pool_finds_order() {
         .assert()
         .success()
         .stdout(predicates::str::contains("II I III"));
+}
+
+#[test]
+fn transliterate_encrypts_umlauts() {
+    // Grüße -> GRUESSE before enciphering; decrypt must round-trip it.
+    let config = workspace_file("examples/day.toml");
+    let cipher = enigma()
+        .args([
+            "encrypt",
+            "--config",
+            &config,
+            "--transliterate",
+            "--text",
+            "Grüße",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cipher = String::from_utf8(cipher).unwrap();
+    enigma()
+        .args(["decrypt", "--config", &config, "--text", cipher.trim()])
+        .assert()
+        .success()
+        .stdout("GRUESSE");
+}
+
+#[test]
+fn ring_scan_finds_key_with_wrong_base_rings() {
+    // True rings DAA; CLI assumes AAA but scans slot 0: full crib must match.
+    let cipher = encrypt_stdout_ring(&["I", "II", "III"], "DAA", "KDO", "", EN_250);
+    enigma()
+        .args([
+            "solve-crib",
+            "--rotors",
+            "I",
+            "II",
+            "III",
+            "--crib",
+            "PLEASANTWITHLITTLE",
+            "--cipher",
+            cipher.trim(),
+            "--lang",
+            "en",
+            "--ring-scan",
+            "0",
+            "--top",
+            "3",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("matches 18/18"));
+}
+
+#[test]
+fn solver_preset_overrides_defaults() {
+    // Preset accepted: search succeeds and finds the key.
+    let config = workspace_file("examples/day.toml");
+    let cipher = encrypt_stdout(&["I", "II", "III"], "KDO", "", EN_250);
+    enigma()
+        .args([
+            "solve-crib",
+            "--config",
+            &config,
+            "--solver-preset",
+            "quick",
+            "--rotors",
+            "I",
+            "II",
+            "III",
+            "--crib",
+            "PLEASANTWITHLITTLE",
+            "--cipher",
+            cipher.trim(),
+            "--lang",
+            "en",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("pos KDO"));
+    // Unknown preset fails naming the known one.
+    enigma()
+        .args([
+            "solve-crib",
+            "--config",
+            &config,
+            "--solver-preset",
+            "bogus",
+            "--rotors",
+            "I",
+            "II",
+            "III",
+            "--crib",
+            "PLEASANTWITHLITTLE",
+            "--cipher",
+            cipher.trim(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("quick"));
+}
+
+#[test]
+fn custom_rotor_from_config_enciphers() {
+    // MY1 is wired exactly like rotor I: same known vector.
+    let dir = std::env::temp_dir();
+    let path = dir.join("enigma_custom_test.toml");
+    std::fs::write(
+        &path,
+        "[machine]\nrotors = [\"MY1\", \"II\", \"III\"]\nrings = \"AAA\"\n\
+         positions = \"AAA\"\nreflector = \"B\"\n\n[custom_rotors.MY1]\n\
+         wiring = \"EKMFLGDQVZNTOWYHXUSPAIBRCJ\"\nnotches = [\"Q\"]\n",
+    )
+    .unwrap();
+    enigma()
+        .args([
+            "encrypt",
+            "--config",
+            path.to_str().unwrap(),
+            "--text",
+            "AAAAA",
+        ])
+        .assert()
+        .success()
+        .stdout("BDZGO");
+    let _ = std::fs::remove_file(&path);
 }

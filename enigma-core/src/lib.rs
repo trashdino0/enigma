@@ -176,7 +176,7 @@ pub const fn pos_to_char(p: u8) -> char {
 /// Parse a 26-letter `A-Z` wiring string into 0-25 contacts.
 ///
 /// Validates length, charset, and permutation. Stack-only.
-pub(crate) fn parse_wiring(s: &str) -> Result<[u8; 26], EnigmaError> {
+pub fn parse_wiring_table(s: &str) -> Result<[u8; 26], EnigmaError> {
     let bytes = s.as_bytes();
     if bytes.len() != 26 {
         return Err(EnigmaError::InvalidWiringLength(bytes.len()));
@@ -197,6 +197,30 @@ pub(crate) fn parse_wiring(s: &str) -> Result<[u8; 26], EnigmaError> {
     Ok(out)
 }
 
+pub(crate) fn parse_wiring(s: &str) -> Result<[u8; 26], EnigmaError> {
+    parse_wiring_table(s)
+}
+
+/// Transliterate German text to the 26-letter machine domain: `ä→ae`,
+/// `ö→oe`, `ü→ue`, `ß→ss` (both cases). Other characters pass through
+/// untouched — pair with the usual letter filtering afterwards.
+pub fn transliterate_de(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            'ä' => out.push_str("ae"),
+            'ö' => out.push_str("oe"),
+            'ü' => out.push_str("ue"),
+            'ß' => out.push_str("ss"),
+            'Ä' => out.push_str("AE"),
+            'Ö' => out.push_str("OE"),
+            'Ü' => out.push_str("UE"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Invert a permutation wiring. Stack-only.
 #[inline]
 pub(crate) const fn invert_wiring(wiring: &[u8; 26]) -> [u8; 26] {
@@ -207,4 +231,27 @@ pub(crate) const fn invert_wiring(wiring: &[u8; 26]) -> [u8; 26] {
         i += 1;
     }
     inv
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transliterate_covers_umlauts_both_cases() {
+        assert_eq!(
+            transliterate_de("Grüße aus München"),
+            "Gruesse aus Muenchen"
+        );
+        assert_eq!(transliterate_de("ÄÖÜ"), "AEOEUE");
+        assert_eq!(transliterate_de("ABC xyz 123!"), "ABC xyz 123!");
+    }
+
+    #[test]
+    fn wiring_table_parses_and_validates() {
+        let w = parse_wiring_table("EKMFLGDQVZNTOWYHXUSPAIBRCJ").unwrap();
+        assert_eq!((w[0], w[1], w[25]), (4, 10, 9));
+        assert!(parse_wiring_table("ABC").is_err());
+        assert!(parse_wiring_table("AAAAAAAAAAAAAAAAAAAAAAAAAA").is_err());
+    }
 }

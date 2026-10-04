@@ -109,6 +109,46 @@ pub struct SolverSection {
     pub min_matches: Option<usize>,
 }
 
+impl SolverSection {
+    /// Overlay `over` on top of `self`: set fields win, `None` inherits.
+    pub fn merged(&self, over: &SolverSection) -> SolverSection {
+        let pick_u = |a: Option<usize>, b: Option<usize>| b.or(a);
+        SolverSection {
+            lang: over.lang.clone().or_else(|| self.lang.clone()),
+            top: pick_u(self.top, over.top),
+            max_plugs: pick_u(self.max_plugs, over.max_plugs),
+            top_positions: pick_u(self.top_positions, over.top_positions),
+            restarts: pick_u(self.restarts, over.restarts),
+            seed: over.seed.or(self.seed),
+            min_matches: pick_u(self.min_matches, over.min_matches),
+        }
+    }
+}
+
+/// A user-defined rotor (Railway/commercial variants, experiments).
+///
+/// ```toml
+/// [custom_rotors.coastal]
+/// wiring = "QWERTYUIOPASDFGHJKLZXCVBNM"
+/// notches = ["A"]
+/// steps = true
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomRotorSpec {
+    /// 26-letter permutation wiring.
+    pub wiring: String,
+    /// Turnover window letters, e.g. `["Q"]` or `["Z", "M"]`.
+    #[serde(default)]
+    pub notches: Vec<String>,
+    /// Whether the pawl can step it (false = Beta/Gamma-style fixed 4th).
+    #[serde(default = "default_true")]
+    pub steps: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
 /// Whole configuration file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -121,6 +161,12 @@ pub struct AppConfig {
     /// Solver flag defaults.
     #[serde(default)]
     pub solver: SolverSection,
+    /// Named solver overlays (`--solver-preset`), merged over `[solver]`.
+    #[serde(default)]
+    pub solver_presets: HashMap<String, SolverSection>,
+    /// User-defined rotors usable anywhere a rotor name goes.
+    #[serde(default)]
+    pub custom_rotors: HashMap<String, CustomRotorSpec>,
 }
 
 impl AppConfig {
@@ -154,6 +200,137 @@ impl AppConfig {
         };
         merged.require()
     }
+
+    /// Resolve `[solver]` + optional `--solver-preset` overlay.
+    pub fn solver_for(&self, preset: Option<&str>) -> Result<SolverSection, ConfigError> {
+        match preset {
+            Some(name) => {
+                let overlay = self.solver_presets.get(name).ok_or_else(|| {
+                    let mut known: Vec<String> =
+                        self.solver_presets.keys().map(|k| k.to_string()).collect();
+                    known.sort();
+                    ConfigError::UnknownProfile {
+                        name: name.to_string(),
+                        known,
+                    }
+                })?;
+                Ok(self.solver.merged(overlay))
+            }
+            None => Ok(self.solver.clone()),
+        }
+    }
+
+    /// Build rotors for an order, resolving historic names first and
+    /// `[custom_rotors]` second. `rings`/`positions` align left -> right.
+    pub fn build_rotors(
+        &self,
+        names: &[String],
+        rings: &[u8],
+        positions: &[u8],
+    ) -> Result<Vec<enigma_core::rotor::Rotor>, ConfigError> {
+        use enigma_core::rotor::Rotor;
+        if names.len() != rings.len() || names.len() != positions.len() {
+            return Err(ConfigError::Parse(format!(
+                "rotors/rings/positions length mismatch ({} vs {} vs {})",
+                names.len(),
+                rings.len(),
+                positions.len()
+            )));
+        }
+        // Distinctness (historic equality can't see customs — compare names).
+        {
+            let mut seen = std::collections::HashSet::new();
+            for name in names {
+                if !seen.insert(name.to_ascii_uppercase()) {
+                    return Err(ConfigError::Parse(format!(
+                        "duplicate rotor {name:?} in order"
+                    )));
+                }
+            }
+        }
+        let mut out = Vec::with_capacity(names.len());
+        for ((name, &ring), &pos) in names.iter().zip(rings).zip(positions) {
+            // Historic names always win; customs fill the gaps.
+            if let Ok(kind) = enigma_core::config::parse_rotor_name(name) {
+                out.push(Rotor::historical(kind, ring, pos)?);
+            } else if let Some(spec) = lookup_custom(&self.custom_rotors, name) {
+                let mut notches = Vec::with_capacity(spec.notches.len());
+                for letter in &spec.notches {
+                    let upper = letter.to_ascii_uppercase();
+                    let bytes = upper.as_bytes();
+                    if bytes.len() != 1 || !bytes[0].is_ascii_uppercase() {
+                        return Err(ConfigError::Parse(format!(
+                            "custom rotor {name:?}: bad notch {letter:?}"
+                        )));
+                    }
+                    notches.push(bytes[0] - b'A');
+                }
+                out.push(Rotor::from_wiring_str(
+                    &spec.wiring,
+                    &notches,
+                    ring,
+                    pos,
+                    spec.steps,
+                )?);
+            } else {
+                return Err(ConfigError::Parse(format!("unknown rotor {name:?}")));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Full machine from a resolved setup, supporting custom rotors.
+    /// Historic-only setups behave exactly like `MachineConfig`.
+    pub fn build_machine(
+        &self,
+        resolved: &ResolvedMachine,
+    ) -> Result<enigma_core::machine::EnigmaMachine, ConfigError> {
+        use enigma_core::config::{EtwKind, ReflectorKind};
+        use enigma_core::{machine::EnigmaMachine, plugboard::Plugboard};
+        let rings = parse_letter_string(&resolved.rings, "rings")?;
+        let positions = parse_letter_string(&resolved.positions, "positions")?;
+        let rotors = self.build_rotors(&resolved.rotors, &rings, &positions)?;
+        let reflector = match ReflectorKind::parse(&resolved.reflector) {
+            Ok(ReflectorKind::A) => enigma_core::reflector::Reflector::a(),
+            Ok(ReflectorKind::B) => enigma_core::reflector::Reflector::b(),
+            Ok(ReflectorKind::C) => enigma_core::reflector::Reflector::c(),
+            Ok(ReflectorKind::ThinB) => enigma_core::reflector::Reflector::thin_b(),
+            Ok(ReflectorKind::ThinC) => enigma_core::reflector::Reflector::thin_c(),
+            Err(e) => return Err(ConfigError::Parse(e.to_string())),
+        }?;
+        let etw = match EtwKind::parse(&resolved.etw) {
+            Ok(EtwKind::Identity) => enigma_core::etw::EntryWheel::identity(),
+            Ok(EtwKind::Qwertz) => enigma_core::etw::EntryWheel::qwertz(),
+            Ok(EtwKind::Custom(w)) => enigma_core::etw::EntryWheel::custom(&w)?,
+            Err(e) => return Err(ConfigError::Parse(e.to_string())),
+        };
+        let plugboard = Plugboard::from_wiring(&resolved.plugs)?;
+        Ok(EnigmaMachine::new(etw, rotors, reflector, plugboard)?)
+    }
+}
+
+/// Case-insensitive custom rotor lookup.
+fn lookup_custom<'a>(
+    customs: &'a HashMap<String, CustomRotorSpec>,
+    name: &str,
+) -> Option<&'a CustomRotorSpec> {
+    customs
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v)
+}
+
+/// Letter string like `"AAA"` into `0..26` positions.
+fn parse_letter_string(s: &str, field: &str) -> Result<Vec<u8>, ConfigError> {
+    let upper = s.trim().to_ascii_uppercase();
+    let mut out = Vec::with_capacity(upper.len());
+    for (i, b) in upper.bytes().enumerate() {
+        if !b.is_ascii_uppercase() {
+            return Err(ConfigError::Parse(format!("{field} index {i} is not A-Z")));
+        }
+        out.push(b - b'A');
+    }
+    Ok(out)
 }
 
 /// Fully concrete machine setup: every field present.
@@ -317,5 +494,62 @@ reflector = "Thin-B"
         let back: AppConfig = toml::from_str(&text).expect("reparses");
         assert_eq!(back.profiles.len(), 1);
         assert_eq!(back.solver.top, Some(5));
+    }
+
+    const CUSTOM: &str = r#"
+[machine]
+rotors = ["MY1", "II", "III"]
+rings = "AAA"
+positions = "AAA"
+reflector = "B"
+
+[custom_rotors.MY1]
+wiring = "EKMFLGDQVZNTOWYHXUSPAIBRCJ"
+notches = ["Q"]
+steps = true
+
+[solver]
+lang = "en"
+
+[solver_presets.thorough]
+max_plugs = 10
+restarts = 8
+"#;
+
+    #[test]
+    fn custom_rotor_matches_historic_twin() {
+        // MY1 is wired exactly like rotor I: same ciphertext expected.
+        let cfg: AppConfig = toml::from_str(CUSTOM).unwrap();
+        let resolved = cfg.machine_for(None).unwrap();
+        let mut m = cfg.build_machine(&resolved).unwrap();
+        assert_eq!(m.encipher_str("AAAAA"), "BDZGO");
+    }
+
+    #[test]
+    fn custom_rotor_rejects_bad_wiring_and_unknown_names() {
+        let mut cfg: AppConfig = toml::from_str(CUSTOM).unwrap();
+        cfg.custom_rotors.get_mut("MY1").unwrap().wiring = "ABC".into();
+        let resolved = cfg.machine_for(None).unwrap();
+        assert!(cfg.build_machine(&resolved).is_err());
+        cfg.custom_rotors.get_mut("MY1").unwrap().wiring = "EKMFLGDQVZNTOWYHXUSPAIBRCJ".into();
+        let resolved2 = ResolvedMachine {
+            rotors: vec!["NOPE".into(), "II".into(), "III".into()],
+            rings: "AAA".into(),
+            positions: "AAA".into(),
+            reflector: "B".into(),
+            plugs: "".into(),
+            etw: "identity".into(),
+        };
+        assert!(cfg.build_machine(&resolved2).is_err());
+    }
+
+    #[test]
+    fn solver_preset_merges_over_base() {
+        let cfg: AppConfig = toml::from_str(CUSTOM).unwrap();
+        let merged = cfg.solver_for(Some("thorough")).unwrap();
+        assert_eq!(merged.lang.as_deref(), Some("en"));
+        assert_eq!(merged.max_plugs, Some(10));
+        assert_eq!(merged.restarts, Some(8));
+        assert!(cfg.solver_for(Some("missing")).is_err());
     }
 }

@@ -378,6 +378,8 @@ pub struct CribParams {
     crib: String,
     offset: Option<usize>,
     top: usize,
+    ring_scan: Vec<usize>,
+    infer_plugs: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -407,6 +409,10 @@ fn crib_start(
         params.offset,
         params.top,
         None,
+        &params.ring_scan,
+        params.infer_plugs,
+        50,
+        10,
     )
     .map_err(|e| e.to_string())?;
     // Sanity: ETW string round-trips (historic searches use named wheels).
@@ -514,6 +520,7 @@ pub struct BlindParams {
     restarts: usize,
     seed: u64,
     top: usize,
+    ring_scan: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -544,6 +551,7 @@ fn blind_start(params: BlindParams, app: AppHandle) -> Result<(), String> {
         rotor_pool,
         fourth,
         rings: parse_letters(&params.rings).map_err(|e| e.to_string())?,
+        scan_rings: params.ring_scan,
         reflector: ReflectorKind::parse(&params.reflector).map_err(|e| e.to_string())?,
         etw: EtwKind::parse(&params.etw).map_err(|e| e.to_string())?,
         max_plugs: params.max_plugs,
@@ -552,6 +560,7 @@ fn blind_start(params: BlindParams, app: AppHandle) -> Result<(), String> {
         seed: params.seed,
         per_order_top: 1,
         top_n: params.top,
+        checkpoint: None,
     };
     std::thread::spawn(move || {
         let scorer = QuadgramScorer::new(lang);

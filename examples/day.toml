@@ -19,6 +19,11 @@ top_positions = 10
 restarts = 3
 seed = 1
 
+[solver_presets.quick]
+top = 2
+top_positions = 3
+restarts = 0
+
 [profiles.naval]
 rotors = ["Beta", "I", "II", "III"]
 rings = "AAAA"

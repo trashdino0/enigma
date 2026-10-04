@@ -127,8 +127,10 @@ impl BlindTab {
                     .trim()
                     .parse::<u64>()
                     .map_err(|_| format!("seed must be a whole number, got {:?}", self.seed))?,
+                scan_rings: Vec::new(),
                 per_order_top: 1,
                 top_n: self.number(&self.top, "winners")?,
+                checkpoint: None,
             })
         })();
         let cfg = match parsed {

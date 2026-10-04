@@ -35,8 +35,10 @@ pub struct BlindConfig {
     pub cipher: Vec<u8>,
     /// Fixed rotor order, left -> right.
     pub order: Vec<HistoricalRotor>,
-    /// Fixed ring settings, one per rotor.
+    /// Fixed ring settings, one per rotor (slots in `scan_rings` are tried).
     pub rings: Vec<u8>,
+    /// Ring slots (0-indexed, left -> right) to scan exhaustively (max 676 combos).
+    pub scan_rings: Vec<usize>,
     /// Fixed reflector.
     pub reflector: ReflectorKind,
     /// Fixed entry wheel.
@@ -60,6 +62,8 @@ pub struct BlindCandidate {
     pub order: Vec<String>,
     /// Window positions left -> right (`0..26`).
     pub positions: Vec<u8>,
+    /// Ring settings left -> right (`0..26`, searched when scanning).
+    pub rings: Vec<u8>,
     /// Plugboard pairs, sorted.
     pub plugs: Vec<(u8, u8)>,
     /// Quadgram fitness of `plaintext`.
@@ -101,15 +105,24 @@ impl XorShift64 {
     }
 }
 
-/// Pre-parsed machine parts for one fixed (order, rings, reflector, etw):
-/// per-candidate work is plugboard + decrypt only.
+/// Pre-parsed machine parts for one fixed (order, reflector, etw):
+/// per-candidate work is plugboard + decrypt only. Wirings parse once here
+/// instead of per position (the old `Rotor::historical` hot path).
 #[derive(Debug, Clone)]
 struct SearchParts {
     etw: EntryWheel,
     reflector: Reflector,
-    rings: Vec<u8>,
-    order: Vec<HistoricalRotor>,
+    parsed: Vec<ParsedRotor>,
     rotor_count: usize,
+}
+
+/// Wiring parsed once; [`Rotor::new`] assembles positions cheaply per candidate.
+#[derive(Debug, Clone)]
+struct ParsedRotor {
+    wiring: [u8; 26],
+    notches: [u8; 2],
+    notch_count: usize,
+    steps: bool,
 }
 
 impl SearchParts {
@@ -129,26 +142,51 @@ impl SearchParts {
             vec![],
             cfg.etw.clone(),
         )?;
+        // Parse wirings once; positions assemble per candidate via Rotor::new.
+        let mut parsed = Vec::with_capacity(cfg.order.len());
+        for &kind in &cfg.order {
+            let spec = kind.spec();
+            let wiring = enigma_core::parse_wiring_table(spec.wiring)?;
+            let mut notches = [0u8; 2];
+            for (i, &n) in spec.notches.iter().enumerate() {
+                notches[i] = n;
+            }
+            parsed.push(ParsedRotor {
+                wiring,
+                notches,
+                notch_count: spec.notches.len(),
+                steps: spec.steps,
+            });
+        }
         Ok(Self {
             etw: probe.etw.build()?,
             reflector: probe.reflector.build()?,
-            rings: cfg.rings.clone(),
-            order: cfg.order.clone(),
+            parsed,
             rotor_count: cfg.order.len(),
         })
     }
 
-    fn rotors_at(&self, positions: &[u8]) -> Result<Vec<Rotor>, EnigmaError> {
-        self.order
+    fn rotors_at(&self, positions: &[u8], rings: &[u8]) -> Result<Vec<Rotor>, EnigmaError> {
+        self.parsed
             .iter()
-            .zip(&self.rings)
+            .zip(rings)
             .zip(positions)
-            .map(|((&kind, &ring), &pos)| Rotor::historical(kind, ring, pos))
+            .map(|((p, &ring), &pos)| {
+                Rotor::new(p.wiring, &p.notches[..p.notch_count], ring, pos, p.steps)
+            })
             .collect()
     }
 
-    fn decrypt(&self, positions: &[u8], plugs: &[(u8, u8)], cipher: &[u8]) -> Vec<u8> {
-        let rotors = self.rotors_at(positions).expect("positions pre-validated");
+    fn decrypt(
+        &self,
+        positions: &[u8],
+        rings: &[u8],
+        plugs: &[(u8, u8)],
+        cipher: &[u8],
+    ) -> Vec<u8> {
+        let rotors = self
+            .rotors_at(positions, rings)
+            .expect("parts pre-validated");
         let pb = Plugboard::from_pairs(plugs).expect("plug candidates valid by construction");
         let mut machine = EnigmaMachine::new(self.etw.clone(), rotors, self.reflector.clone(), pb)
             .expect("parts pre-validated");
@@ -156,7 +194,7 @@ impl SearchParts {
     }
 }
 
-fn sorted_pairs(mut pairs: Vec<(u8, u8)>) -> Vec<(u8, u8)> {
+pub(crate) fn sorted_pairs(mut pairs: Vec<(u8, u8)>) -> Vec<(u8, u8)> {
     for (a, b) in &mut pairs {
         if a > b {
             std::mem::swap(a, b);
@@ -176,7 +214,7 @@ fn used_letters(pairs: &[(u8, u8)]) -> [bool; 26] {
 }
 
 /// All single-move neighbours of `pairs` within the `max_plugs` cap.
-fn neighbours(pairs: &[(u8, u8)], max_plugs: usize) -> Vec<Vec<(u8, u8)>> {
+pub(crate) fn neighbours(pairs: &[(u8, u8)], max_plugs: usize) -> Vec<Vec<(u8, u8)>> {
     let mut out = Vec::new();
     let used = used_letters(pairs);
     let free: Vec<u8> = (0..26u8).filter(|&c| !used[c as usize]).collect();
@@ -233,11 +271,12 @@ fn climb(
     cipher: &[u8],
     scorer: &QuadgramScorer,
     positions: &[u8],
+    rings: &[u8],
     start: Vec<(u8, u8)>,
     max_plugs: usize,
 ) -> (Vec<(u8, u8)>, f32) {
     let mut best_pairs = sorted_pairs(start);
-    let mut best_plain = parts.decrypt(positions, &best_pairs, cipher);
+    let mut best_plain = parts.decrypt(positions, rings, &best_pairs, cipher);
     let mut best_score = scorer.score_bytes(&best_plain);
     for _ in 0..200 {
         let mut improved = false;
@@ -247,7 +286,7 @@ fn climb(
         cands.dedup();
         for cand in cands {
             let cand = sorted_pairs(cand);
-            let plain = parts.decrypt(positions, &cand, cipher);
+            let plain = parts.decrypt(positions, rings, &cand, cipher);
             let score = scorer.score_bytes(&plain);
             if score > best_score {
                 best_score = score;
@@ -293,7 +332,7 @@ pub enum BlindProgress {
 }
 
 /// Ciphertext-only search. Returns the top `top_n` by
-/// `(score desc, positions asc, plugs asc)` — deterministic for a fixed seed.
+/// `(score desc, positions asc, rings asc, plugs asc)` — deterministic.
 pub fn solve_blind(
     cfg: &BlindConfig,
     scorer: &QuadgramScorer,
@@ -302,45 +341,49 @@ pub fn solve_blind(
     use std::sync::atomic::{AtomicUsize, Ordering};
     let parts = SearchParts::build(cfg)?;
     let n = parts.rotor_count;
-    let total_positions: usize = 26usize.pow(n as u32);
+    let combos = crate::crib::ring_combos(&cfg.rings, &cfg.scan_rings)?;
+    let npos: usize = 26usize.pow(n as u32);
+    let total = npos * combos.len();
 
-    // Stage 1: unplugged scan over every position.
+    // Stage 1: unplugged scan over every (position, rings) pair.
     let scanned_tick = AtomicUsize::new(0);
-    let mut scanned: Vec<(f32, Vec<u8>)> = (0..total_positions)
+    let mut scanned: Vec<(f32, Vec<u8>, usize)> = (0..total)
         .into_par_iter()
-        .map(|pos_idx| {
+        .map(|idx| {
+            let combo = idx / npos;
+            let pos_idx = idx % npos;
             let mut digits = vec![0u8; n];
             let mut rest = pos_idx;
             for d in (0..n).rev() {
                 digits[d] = (rest % 26) as u8;
                 rest /= 26;
             }
-            let plain = parts.decrypt(&digits, &[], &cfg.cipher);
+            let rings = &combos[combo];
+            let plain = parts.decrypt(&digits, rings, &[], &cfg.cipher);
             let done = scanned_tick.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(cb) = on_progress {
-                if done.is_multiple_of(2048) || done == total_positions {
-                    cb(BlindProgress::Scan {
-                        done,
-                        total: total_positions,
-                    });
+                if done.is_multiple_of(2048) || done == total {
+                    cb(BlindProgress::Scan { done, total });
                 }
             }
-            (scorer.score_bytes(&plain), digits)
+            (scorer.score_bytes(&plain), digits, combo)
         })
         .collect();
     scanned.par_sort_by(|a, b| {
         b.0.partial_cmp(&a.0)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
     });
     scanned.truncate(cfg.top_positions.max(1));
 
-    // Stage 2: plug climb per surviving position x restart.
+    // Stage 2: plug climb per surviving (position, rings) x restart.
     let climbed_tick = AtomicUsize::new(0);
     let climb_total = scanned.len();
     let mut results: Vec<BlindCandidate> = scanned
         .into_par_iter()
-        .flat_map(|(_, positions)| {
+        .flat_map(|(_, positions, combo)| {
+            let rings = combos[combo].clone();
             let restarts: Vec<Vec<(u8, u8)>> = {
                 let mut v = vec![vec![]];
                 for r in 1..=cfg.restarts {
@@ -358,6 +401,7 @@ pub fn solve_blind(
                         &cfg.cipher,
                         scorer,
                         &positions,
+                        &rings,
                         start,
                         cfg.max_plugs,
                     );
@@ -372,13 +416,17 @@ pub fn solve_blind(
                 });
             }
             climbed
+                .into_iter()
+                .map(|(positions, plugs, score)| (positions, rings.clone(), plugs, score))
+                .collect::<Vec<_>>()
         })
-        .map(|(positions, plugs, score)| {
-            let plain = parts.decrypt(&positions, &plugs, &cfg.cipher);
+        .map(|(positions, rings, plugs, score)| {
+            let plain = parts.decrypt(&positions, &rings, &plugs, &cfg.cipher);
             let text: String = plain.iter().map(|&p| enigma_core::pos_to_char(p)).collect();
             BlindCandidate {
                 order: crate::crib::order_names(&cfg.order),
                 positions,
+                rings,
                 plugs,
                 score,
                 plaintext: text,
@@ -391,10 +439,11 @@ pub fn solve_blind(
             .partial_cmp(&a.score)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.positions.cmp(&b.positions))
+            .then(a.rings.cmp(&b.rings))
             .then(a.plugs.cmp(&b.plugs))
     });
     // Identical restarts converge to the same winner; show it once.
-    results.dedup_by(|a, b| a.positions == b.positions && a.plugs == b.plugs);
+    results.dedup_by(|a, b| a.positions == b.positions && a.rings == b.rings && a.plugs == b.plugs);
     results.truncate(cfg.top_n.max(1));
     Ok(results)
 }
@@ -425,10 +474,14 @@ pub struct BlindPoolConfig {
     pub restarts: usize,
     /// PRNG seed (xored with the per-order index for diversity).
     pub seed: u64,
+    /// Ring slots to scan (shared by every order).
+    pub scan_rings: Vec<usize>,
     /// Winners kept per order before the global merge.
     pub per_order_top: usize,
     /// Global winners returned.
     pub top_n: usize,
+    /// JSON checkpoint resuming per finished order (long M4 runs).
+    pub checkpoint: Option<std::path::PathBuf>,
 }
 
 /// Blind search over every pool order: each order runs [`solve_blind`] (itself
@@ -471,49 +524,85 @@ pub fn solve_blind_pool(
         })
         .collect();
 
-    let mut merged: Vec<BlindCandidate> = {
-        use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
-        let order_tick = AtomicUsize::new(0);
-        let order_total = orders.len();
-        orders
-            .into_par_iter()
-            .enumerate()
-            .flat_map(|(idx, order)| {
-                let single = BlindConfig {
-                    cipher: cfg.cipher.clone(),
-                    order,
-                    rings: cfg.rings.clone(),
-                    reflector: cfg.reflector,
-                    etw: cfg.etw.clone(),
-                    max_plugs: cfg.max_plugs,
-                    top_positions: cfg.top_positions,
-                    restarts: cfg.restarts,
-                    seed: cfg.seed ^ (idx as u64).wrapping_mul(0x9E3779B97F4A7C15),
-                    top_n: cfg.per_order_top,
-                };
-                // Inner progress stays silent; the pool reports per order.
-                let out = solve_blind(&single, scorer, None).unwrap_or_default();
-                let done = order_tick.fetch_add(1, AtomicOrdering::Relaxed) + 1;
-                if let Some(cb) = on_progress {
-                    cb(BlindProgress::Order {
-                        done,
-                        total: order_total,
-                    });
-                }
-                out
-            })
-            .collect()
-    };
+    // Resume: skip finished orders, seed winners.
+    let mut checkpoint = cfg
+        .checkpoint
+        .as_deref()
+        .and_then(load_blind_checkpoint)
+        .unwrap_or_default();
+    let mut merged: Vec<BlindCandidate> = checkpoint.best.clone();
+    let live: Vec<(usize, Vec<HistoricalRotor>)> = orders
+        .into_iter()
+        .enumerate()
+        .filter(|(_, order)| {
+            let key = order_key(order);
+            !checkpoint.done_orders.contains(&key)
+        })
+        .collect();
+    let order_total = live.len() + checkpoint.done_orders.len();
+    let mut done = checkpoint.done_orders.len();
 
-    merged.par_sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(a.order.cmp(&b.order))
-            .then(a.positions.cmp(&b.positions))
-    });
-    merged.truncate(cfg.top_n.max(1));
+    // Sequential over orders (checkpoint granularity); rayon inside each.
+    for (idx, order) in live {
+        let single = BlindConfig {
+            cipher: cfg.cipher.clone(),
+            order: order.clone(),
+            rings: cfg.rings.clone(),
+            scan_rings: cfg.scan_rings.clone(),
+            reflector: cfg.reflector,
+            etw: cfg.etw.clone(),
+            max_plugs: cfg.max_plugs,
+            top_positions: cfg.top_positions,
+            restarts: cfg.restarts,
+            seed: cfg.seed ^ (idx as u64).wrapping_mul(0x9E3779B97F4A7C15),
+            top_n: cfg.per_order_top,
+        };
+        // Inner progress stays silent; the pool reports per order.
+        let mut out = solve_blind(&single, scorer, None).unwrap_or_default();
+        merged.append(&mut out);
+        merged.par_sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.order.cmp(&b.order))
+                .then(a.positions.cmp(&b.positions))
+                .then(a.rings.cmp(&b.rings))
+        });
+        merged.truncate(cfg.top_n.max(1));
+        checkpoint.done_orders.push(order_key(&order));
+        checkpoint.best = merged.clone();
+        done += 1;
+        if let Some(path) = &cfg.checkpoint {
+            let _ = std::fs::write(path, serde_json::to_string(&checkpoint).unwrap_or_default());
+        }
+        if let Some(cb) = on_progress {
+            cb(BlindProgress::Order {
+                done,
+                total: order_total,
+            });
+        }
+    }
     Ok(merged)
+}
+
+/// Checkpoint key for one pool order.
+fn order_key(order: &[HistoricalRotor]) -> String {
+    crate::crib::order_names(order).join(" ")
+}
+
+/// `{done_orders, best}` checkpoint written per finished pool order.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BlindCheckpoint {
+    /// Order keys already fully searched.
+    pub done_orders: Vec<String>,
+    /// Current global winners.
+    pub best: Vec<BlindCandidate>,
+}
+
+/// Load a blind checkpoint file. `None` when missing or corrupt.
+pub fn load_blind_checkpoint(path: &std::path::Path) -> Option<BlindCheckpoint> {
+    let data = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&data).ok()
 }
 
 fn positions_hash(positions: &[u8]) -> u64 {
@@ -536,18 +625,26 @@ mod tests {
         ALLPREPARATIONSMUSTBECOMPLETEDBEFORESUNSETONTHEEVEOFFRIDAYX";
 
     fn encipher_en(order: &[&str], pos: &str, plugs: &str, text: &str) -> Vec<u8> {
+        encipher_en_ring(order, "AAA", pos, plugs, text)
+    }
+
+    fn encipher_en_ring(
+        order: &[&str],
+        rings: &str,
+        pos: &str,
+        plugs: &str,
+        text: &str,
+    ) -> Vec<u8> {
         let cfg = enigma_core::config::MachineConfig::from_strings(
-            order, "AAA", pos, "B", plugs, "identity",
+            order, rings, pos, "B", plugs, "identity",
         )
         .unwrap();
         let mut m = cfg.build_machine().unwrap();
         super::super::crib::encode_text(&m.encipher_str(&text.to_ascii_uppercase()))
     }
 
-    #[test]
-    fn blind_recovers_positions_and_plugs() {
-        let cipher = encipher_en(&["I", "II", "III"], "MKL", "AV BS CG", EN_TEXT);
-        let cfg = BlindConfig {
+    fn base_blind_config(cipher: Vec<u8>) -> BlindConfig {
+        BlindConfig {
             cipher,
             order: vec![
                 HistoricalRotor::I,
@@ -555,14 +652,26 @@ mod tests {
                 HistoricalRotor::III,
             ],
             rings: vec![0, 0, 0],
+            scan_rings: vec![],
             reflector: ReflectorKind::B,
             etw: EtwKind::Identity,
-            max_plugs: 6,
-            top_positions: 8,
-            restarts: 3,
-            seed: 0xC10C,
-            top_n: 3,
-        };
+            max_plugs: 0,
+            top_positions: 2,
+            restarts: 0,
+            seed: 1,
+            top_n: 1,
+        }
+    }
+
+    #[test]
+    fn blind_recovers_positions_and_plugs() {
+        let cipher = encipher_en(&["I", "II", "III"], "MKL", "AV BS CG", EN_TEXT);
+        let mut cfg = base_blind_config(cipher);
+        cfg.max_plugs = 6;
+        cfg.top_positions = 8;
+        cfg.restarts = 3;
+        cfg.seed = 0xC10C;
+        cfg.top_n = 3;
         let scorer = QuadgramScorer::new(Lang::En);
         let best = solve_blind(&cfg, &scorer, None).unwrap();
         assert!(!best.is_empty());
@@ -583,24 +692,28 @@ mod tests {
 
     #[test]
     fn short_cipher_rejected() {
-        let cfg = BlindConfig {
-            cipher: vec![0, 1, 2],
-            order: vec![
-                HistoricalRotor::I,
-                HistoricalRotor::II,
-                HistoricalRotor::III,
-            ],
-            rings: vec![0, 0, 0],
-            reflector: ReflectorKind::B,
-            etw: EtwKind::Identity,
-            max_plugs: 0,
-            top_positions: 2,
-            restarts: 0,
-            seed: 1,
-            top_n: 1,
-        };
+        let cfg = base_blind_config(vec![0, 1, 2]);
         let scorer = QuadgramScorer::new(Lang::En);
         assert!(solve_blind(&cfg, &scorer, None).is_err());
+    }
+
+    #[test]
+    fn blind_ring_scan_recovers_rings() {
+        // True rings CAA; scan slot 0. Positions-only keeps it fast.
+        let cipher = encipher_en_ring(&["I", "II", "III"], "CAA", "MKL", "", EN_TEXT);
+        let mut cfg = base_blind_config(cipher);
+        cfg.scan_rings = vec![0];
+        cfg.top_positions = 5;
+        let scorer = QuadgramScorer::new(Lang::En);
+        let best = solve_blind(&cfg, &scorer, None).unwrap();
+        assert!(!best.is_empty());
+        // Full-decrypt check: any equivalent key must reproduce the text.
+        let expected: String = EN_TEXT
+            .chars()
+            .filter(|c| c.is_ascii_alphabetic())
+            .map(|c| c.to_ascii_uppercase())
+            .collect();
+        assert_eq!(best[0].plaintext, expected);
     }
 
     #[test]
@@ -622,13 +735,50 @@ mod tests {
             top_positions: 3,
             restarts: 0,
             seed: 7,
+            scan_rings: vec![],
             per_order_top: 1,
             top_n: 2,
+            checkpoint: None,
         };
         let scorer = QuadgramScorer::new(Lang::En);
         let best = solve_blind_pool(&cfg, &scorer, None).unwrap();
         assert!(!best.is_empty());
         assert_eq!(best[0].order, vec!["II", "I", "III"]);
         assert_eq!(best[0].positions, vec![1, 13, 10], "BNK recovered");
+    }
+
+    #[test]
+    fn blind_checkpoint_resume_gives_same_result() {
+        let cipher = encipher_en(&["II", "I", "III"], "BNK", "", EN_TEXT);
+        let path = std::env::temp_dir().join("enigma_blind_test_checkpoint.json");
+        let _ = std::fs::remove_file(&path);
+        let mkcfg = || BlindPoolConfig {
+            cipher: cipher.clone(),
+            rotor_pool: vec![
+                HistoricalRotor::I,
+                HistoricalRotor::II,
+                HistoricalRotor::III,
+            ],
+            fourth: None,
+            rings: vec![0, 0, 0],
+            scan_rings: vec![],
+            reflector: ReflectorKind::B,
+            etw: EtwKind::Identity,
+            max_plugs: 0,
+            top_positions: 3,
+            restarts: 0,
+            seed: 7,
+            per_order_top: 1,
+            top_n: 2,
+            checkpoint: Some(path.clone()),
+        };
+        let scorer = QuadgramScorer::new(Lang::En);
+        let first = solve_blind_pool(&mkcfg(), &scorer, None).unwrap();
+        assert!(path.exists(), "checkpoint file should be written");
+        let second = solve_blind_pool(&mkcfg(), &scorer, None).unwrap();
+        assert_eq!(first.len(), second.len());
+        assert_eq!(first[0].order, second[0].order);
+        assert_eq!(first[0].positions, second[0].positions);
+        let _ = std::fs::remove_file(&path);
     }
 }
