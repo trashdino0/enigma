@@ -17,6 +17,19 @@ jobs:
       - run: cargo install tauri-cli --locked
       - run: cargo build --release -p enigma-gui -p enigma-cli -p enigma-tui
       - run: cargo tauri build --bundles nsis
+      - name: Verify artifacts
+        shell: pwsh
+        run: |
+          $want = @(
+            "target/release/enigma-desktop.exe",
+            "target/release/enigma-gui.exe",
+            "target/release/enigma.exe",
+            "target/release/enigma-tui.exe"
+          )
+          $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $setup) { throw "NSIS installer not found" }
+          foreach ($f in $want) { if (-not (Test-Path $f)) { throw "missing artifact: $f" } }
+          "artifacts:"; $want + @($setup.FullName) | ForEach-Object { Get-Item $_ | Select-Object Name, Length }
       - run: >
           gh release create "${{ github.ref_name }}"
           --title "${{ github.ref_name }}"
@@ -30,7 +43,7 @@ jobs:
       - name: Attach NSIS installer
         shell: pwsh
         run: |
-          $setup = Get-ChildItem enigma-desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $setup = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           gh release upload "${{ github.ref_name }}" $setup.FullName
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
