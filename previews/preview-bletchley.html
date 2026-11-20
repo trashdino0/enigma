@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Preview A: Bletchley atelier (static mock)</title>
+<style>
+  :root {
+    --enamel: #10201a;
+    --enamel-2: #16291f;
+    --brass: #c9a227;
+    --brass-dim: #8a6f1c;
+    --ink: #ece7d4;
+    --dim: #9a917a;
+    --red: #d0684e;
+    --line: #3a4a35;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(900px 500px at 50% -10%, rgba(201, 162, 39, 0.07), transparent 70%),
+      linear-gradient(#0d1a14, #10201a);
+    min-height: 100vh; padding: 0 26px 30px;
+  }
+  .plate-label {
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--brass-dim); font-weight: 600;
+  }
+  header { padding-top: 22px; }
+  .brand { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; color: var(--brass); }
+  .tagline { color: var(--dim); font-size: 13px; margin: 2px 0 14px 2px; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 18px; }
+  .tab {
+    background: transparent; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .tab.active { color: #0d1a14; background: var(--brass); border-color: var(--brass); }
+  .cols { display: flex; gap: 20px; align-items: flex-start; }
+  .card {
+    background: linear-gradient(var(--enamel-2), #101f18);
+    border: 1px solid var(--brass-dim); border-radius: 14px;
+    outline: 1px solid rgba(201, 162, 39, 0.25); outline-offset: 5px;
+    padding: 18px; min-width: 300px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(236, 231, 212, 0.08);
+  }
+  .card.grow { flex: 1; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; color: var(--brass); }
+  label { display: block; margin: 10px 0; font-size: 13px; color: var(--dim); }
+  .field {
+    display: block; width: 100%; margin-top: 4px;
+    background: #0a1410; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; font-size: 14px;
+  }
+  button.cta {
+    background: var(--brass); color: #201a05; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  button.ghost {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  .trail {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5em; height: 1.5em; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.22); font-size: 13px;
+  }
+  .btnrow { display: flex; gap: 8px; margin-top: 12px; }
+  /* Physical rotor drums */
+  .drums { display: flex; gap: 14px; margin: 6px 0 4px; }
+  .drum { width: 64px; text-align: center; }
+  .drum .wheel {
+    height: 92px; border-radius: 12px;
+    background: linear-gradient(#2b3a2c 0%, #101b13 18%, #060c08 50%, #101b13 82%, #2b3a2c 100%);
+    border: 1px solid var(--brass-dim);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px; font-weight: 800; color: var(--brass);
+    box-shadow: inset 0 6px 10px rgba(0,0,0,.7), inset 0 -6px 10px rgba(0,0,0,.7);
+    position: relative;
+  }
+  .drum .wheel::before, .drum .wheel::after {
+    content: ""; position: absolute; left: 8px; right: 8px; height: 2px;
+    background: rgba(201, 162, 39, 0.35);
+  }
+  .drum .wheel::before { top: 22px; }
+  .drum .wheel::after { bottom: 22px; }
+  .drum .cap { font-size: 11px; letter-spacing: 0.18em; color: var(--dim); margin-top: 6px; text-transform: uppercase; }
+  .readout {
+    background: #0a1410; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; font-family: Consolas, monospace; font-size: 14px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .trace-svg { width: 100%; height: 120px; display: block; }
+  .intercept {
+    border: 1px solid var(--brass-dim); border-radius: 10px;
+    padding: 10px 12px; margin-top: 10px; background: rgba(201, 162, 39, 0.05);
+  }
+  .intercept .head { color: var(--brass); font-weight: 700; font-size: 13px; }
+  .intercept .body { font-family: Consolas, monospace; font-size: 13px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="plate-label">Bletchley instrument no. 3</div>
+  <div class="brand">🦕 EnigmaSaurus</div>
+  <div class="tagline">the Enigma workbench</div>
+  <div class="tabs">
+    <button class="tab active">Machine</button>
+    <button class="tab">Crib hunt</button>
+    <button class="tab">Blind hunt</button>
+  </div>
+</header>
+<main>
+  <div class="cols">
+    <div class="card">
+      <h2>Set up the beast</h2>
+      <div class="plate-label">Walzenlage · I II III</div>
+      <label>Rings <span class="field">AAA</span></label>
+      <label>Positions <span class="field">A A F</span></label>
+      <label>Reflector <span class="field">B (classic)</span></label>
+      <label>Plugs <span class="field">AV BS CG</span></label>
+      <div class="btnrow">
+        <button class="cta">Load machine <span class="trail">↗</span></button>
+        <button class="ghost">Save output…</button>
+      </div>
+    </div>
+    <div class="card grow">
+      <div class="plate-label">Live windows</div>
+      <div class="drums">
+        <div class="drum"><div class="wheel">A</div><div class="cap">I · slow</div></div>
+        <div class="drum"><div class="wheel">A</div><div class="cap">II · mid</div></div>
+        <div class="drum"><div class="wheel">F</div><div class="cap">III · fast</div></div>
+      </div>
+      <h2>Type</h2>
+      <div class="readout">AAAAA</div>
+      <h2>Output</h2>
+      <div class="readout">BDZGO</div>
+      <h2>Signal path</h2>
+      <svg class="trace-svg" viewBox="0 0 640 120" role="img" aria-label="Current path for the last letter">
+        <line x1="20" y1="60" x2="620" y2="60" stroke="#3a4a35" stroke-width="2"/>
+        <g font-family="Consolas, monospace" font-size="13" text-anchor="middle">
+          <circle cx="40" cy="60" r="14" fill="#c9a227"/><text x="40" y="65" fill="#201a05" font-weight="bold">A</text><text x="40" y="95" fill="#9a917a" font-size="10">IN</text>
+          <circle cx="120" cy="60" r="14" fill="none" stroke="#c9a227" stroke-width="2"/><text x="120" y="65" fill="#ece7d4">B</text><text x="120" y="95" fill="#9a917a" font-size="10">STB</text>
+          <circle cx="200" cy="60" r="14" fill="none" stroke="#3a4a35" stroke-width="2"/><text x="200" y="65" fill="#ece7d4">B</text><text x="200" y="95" fill="#9a917a" font-size="10">ETW</text>
+          <circle cx="280" cy="60" r="14" fill="none" stroke="#3a4a35" stroke-width="2"/><text x="280" y="65" fill="#ece7d4">K</text><text x="280" y="95" fill="#9a917a" font-size="10">R3-R1</text>
+          <circle cx="360" cy="60" r="14" fill="none" stroke="#c9a227" stroke-width="2"/><text x="360" y="65" fill="#ece7d4">S</text><text x="360" y="95" fill="#9a917a" font-size="10">UKW</text>
+          <circle cx="440" cy="60" r="14" fill="none" stroke="#3a4a35" stroke-width="2"/><text x="440" y="65" fill="#ece7d4">E</text><text x="440" y="95" fill="#9a917a" font-size="10">BACK</text>
+          <circle cx="520" cy="60" r="14" fill="none" stroke="#3a4a35" stroke-width="2"/><text x="520" y="65" fill="#ece7d4">D</text><text x="520" y="95" fill="#9a917a" font-size="10">ETW</text>
+          <circle cx="600" cy="60" r="14" fill="#c9a227"/><text x="600" y="65" fill="#201a05" font-weight="bold">D</text><text x="600" y="95" fill="#9a917a" font-size="10">OUT</text>
+        </g>
+      </svg>
+      <div class="intercept">
+        <div class="head">#1 · I II III · pos KDO · matches 12/12</div>
+        <div class="body">DIEANGRIFFBEGINNTBEIMORGENGRAUEN…</div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

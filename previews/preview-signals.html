@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Preview B: Night signals (static mock)</title>
+<style>
+  :root {
+    --bg: #060807;
+    --panel: #0b0e0c;
+    --phos: #57d977;
+    --phos-dim: #234d2e;
+    --ink: #c9d6cb;
+    --dim: #5f7163;
+    --warn: #d8b34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: Consolas, "Cascadia Mono", monospace;
+    min-height: 100vh; padding: 0 26px 30px; font-size: 14px;
+  }
+  header { padding-top: 18px; }
+  .brand { font-size: 15px; font-weight: 700; color: var(--phos); letter-spacing: 0.08em; }
+  .brand small { color: var(--dim); font-weight: 400; }
+  .tabs { display: flex; gap: 0; margin: 12px 0 0; border-bottom: 1px solid #1c2420; }
+  .tab {
+    background: transparent; color: var(--dim); border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .tab.active { color: var(--phos); border-bottom-color: var(--phos); }
+  .cols { display: flex; gap: 18px; align-items: flex-start; margin-top: 16px; }
+  .pane { background: var(--panel); border: 1px solid #1c2420; padding: 16px; min-width: 300px; }
+  .pane.grow { flex: 1; }
+  .pane h2 { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+  .fld { margin: 8px 0; font-size: 13px; }
+  .fld > span { display: block; color: var(--dim); margin-bottom: 3px; }
+  .fld .val {
+    display: block; background: #050706; border: 1px solid #1c2420;
+    padding: 6px 8px; color: var(--ink);
+  }
+  .fld .val b { color: var(--phos); font-weight: 700; }
+  button {
+    background: var(--phos); color: #041007; border: none;
+    padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    margin-top: 10px;
+  }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid #2a352c; }
+  .windows { font-size: 34px; font-weight: 700; letter-spacing: 12px; color: var(--phos); margin: 2px 0 8px; }
+  .io { background: #050706; border: 1px solid #1c2420; padding: 10px; white-space: pre-wrap; word-break: break-all; }
+  .log { margin-top: 12px; }
+  .log div { padding: 5px 0; border-bottom: 1px dotted #1c2420; }
+  .log .t { color: var(--dim); margin-right: 10px; }
+  .log .ok { color: var(--phos); }
+  .log .hl { color: var(--warn); }
+  .bar { height: 6px; background: #141a16; margin: 4px 0 10px; }
+  .bar i { display: block; height: 100%; width: 72%; background: var(--phos); }
+  .winner { border-left: 3px solid var(--phos); padding: 8px 12px; margin-top: 10px; background: #0a0f0b; }
+  .winner .plain { color: var(--ink); margin-top: 6px; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">enigmasaurus <small>v0.1.0 · m3/m4 workbench</small></div>
+  <div class="tabs">
+    <button class="tab active">machine</button>
+    <button class="tab">crib-hunt</button>
+    <button class="tab">blind-hunt</button>
+  </div>
+</header>
+<main>
+  <div class="cols">
+    <div class="pane">
+      <h2>key</h2>
+      <div class="fld"><span>walzenlage</span><span class="val">I II III <b>·</b> UKW-B</span></div>
+      <div class="fld"><span>ringstellung</span><span class="val">AAA</span></div>
+      <div class="fld"><span>grundstellung</span><span class="val">A A F</span></div>
+      <div class="fld"><span>stecker</span><span class="val">AV BS CG</span></div>
+      <button>Load machine</button>
+      <button class="ghost">Save output</button>
+    </div>
+    <div class="pane grow">
+      <h2>circuit</h2>
+      <div class="windows">A A F</div>
+      <div class="fld"><span>in</span><span class="val">AAAAA</span></div>
+      <div class="fld"><span>out</span><span class="val"><b>BDZGO</b></span></div>
+      <div class="fld"><span>trace</span><span class="val">IN:A STB:A ETW:A R3:C R2:D R1:F UKW:S R1:S R2:E R3:B ETW:B STB:B</span></div>
+      <h2>intercept log</h2>
+      <div class="log">
+        <div><span class="t">14:02:11</span>order I II III swept <span class="ok">17576/17576</span></div>
+        <div><span class="t">14:02:12</span><span class="ok">#1 I II III pos KDO matches 12/12 score -543.0</span></div>
+        <div><span class="t">14:02:12</span><span class="hl">plaintext recovered, 62 chars</span></div>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="winner">
+        <div><span class="ok">#1</span> I II III · pos KDO · rings AAA · plugs AV BS CG</div>
+        <div class="plain">DIEANGRIFFBEGINNTBEIMORGENGRAUEN…</div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

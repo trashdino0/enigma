@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Preview C: Premium jungle (static mock)</title>
+<style>
+  :root {
+    --jungle: #101a12;
+    --card: rgba(24, 40, 27, 0.72);
+    --fern: #7eb86e;
+    --amber: #e8b85a;
+    --ink: #e8efe6;
+    --dim: #9db3a0;
+    --line: rgba(126, 184, 110, 0.22);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(700px 460px at 84% 6%, rgba(64, 150, 84, 0.16), transparent 70%),
+      radial-gradient(760px 560px at 6% 104%, rgba(232, 184, 90, 0.10), transparent 70%),
+      radial-gradient(1200px 600px at 20% -10%, #1b2f1e 0%, #101a12 60%);
+    min-height: 100vh; padding: 0 30px 34px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  }
+  header { padding-top: 26px; }
+  .brand { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; color: var(--amber); }
+  .tagline { color: var(--dim); font-size: 13px; font-weight: 500; margin: 2px 0 16px 34px; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+  .tab {
+    background: rgba(24, 40, 27, 0.6); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 18px; font-size: 15px; font-weight: 500; cursor: pointer;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    transition: background-color 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+      border-color 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .tab.active { background: rgba(46, 84, 50, 0.75); border-color: var(--fern); font-weight: 700; }
+  .tab:hover { border-color: var(--fern); transform: translateY(-1px); }
+  .cols { display: flex; gap: 22px; align-items: flex-start; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; min-width: 300px;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    box-shadow:
+      0 0 0 6px rgba(26, 42, 28, 0.45),
+      0 18px 44px rgba(4, 12, 6, 0.55),
+      inset 0 1px 0 rgba(232, 239, 230, 0.10);
+    animation: rise 0.7s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  .card.grow { flex: 1; animation-delay: 0.08s; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+  }
+  .card h2 { margin: 0 0 12px; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; color: var(--fern); }
+  label { display: block; margin: 10px 0; font-size: 13px; color: var(--dim); }
+  .field {
+    display: block; margin-top: 4px;
+    background: rgba(10, 18, 12, 0.8); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; font-size: 14px;
+  }
+  button.cta {
+    background: #3e6e42; color: #e8efe6; border: 1px solid var(--fern); border-radius: 8px;
+    padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center;
+    transition: background-color 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  button.cta:hover { background: #4c854f; transform: translateY(-1px); }
+  button.cta:active { transform: scale(0.98); }
+  .trail {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.4em; height: 1.4em; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.28); margin-left: 0.5em;
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  button.cta:hover .trail { transform: translate(2px, -2px) scale(1.08); }
+  button.ghost {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  .btnrow { display: flex; gap: 8px; margin-top: 12px; }
+  .windows { font-size: 46px; font-weight: 800; letter-spacing: 16px; color: var(--fern); margin: 4px 0; }
+  .readout {
+    background: rgba(10, 18, 12, 0.8); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; font-family: Consolas, monospace; font-size: 14px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .trace { color: var(--amber); font-size: 12px; }
+  .result {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; margin-top: 10px;
+    background: rgba(126, 184, 110, 0.07);
+  }
+  .result .head { color: var(--amber); font-weight: 700; font-size: 13px; }
+  .result .bar { height: 6px; border-radius: 3px; background: rgba(126,184,110,.18); margin-top: 8px; }
+  .result .bar i { display: block; height: 100%; width: 92%; border-radius: 3px; background: var(--fern); }
+  .result .body { font-family: Consolas, monospace; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🦕 EnigmaSaurus</div>
+  <div class="tagline">the Enigma workbench</div>
+  <div class="tabs">
+    <button class="tab active">🔤 Machine</button>
+    <button class="tab">🔍 Crib hunt</button>
+    <button class="tab">🌿 Blind hunt</button>
+  </div>
+</header>
+<main>
+  <div class="cols">
+    <div class="card">
+      <h2>Set up the beast</h2>
+      <label>Rotors <span class="field">I&nbsp;&nbsp;II&nbsp;&nbsp;III</span></label>
+      <label>Rings <span class="field">AAA</span></label>
+      <label>Positions <span class="field">A A F</span></label>
+      <label>Reflector <span class="field">B (classic)</span></label>
+      <label>Plugs <span class="field">AV BS CG</span></label>
+      <div class="btnrow">
+        <button class="cta">Load machine <span class="trail">↗</span></button>
+        <button class="ghost">Save output…</button>
+      </div>
+    </div>
+    <div class="card grow">
+      <div class="windows">A A F</div>
+      <h2>Type</h2>
+      <div class="readout">AAAAA</div>
+      <h2>Output</h2>
+      <div class="readout">BDZGO</div>
+      <h2>Signal path</h2>
+      <div class="readout trace">IN:A STB:A ETW:A R3:C R2:D R1:F UKW:S R1:S R2:E R3:B ETW:B STB:B</div>
+      <div class="result">
+        <div class="head">#1 · I II III · pos KDO · matches 12/12</div>
+        <div class="bar"><i></i></div>
+        <div class="body">DIEANGRIFFBEGINNTBEIMORGENGRAUEN…</div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
